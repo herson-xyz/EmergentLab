@@ -8,6 +8,7 @@ import { useSmoothLifeState } from './hooks/useSmoothLifeState'
 import { useSmoothLifeCompute } from './hooks/useSmoothLifeCompute'
 import { useShaderParameterControls } from './hooks/useShaderParameterControls'
 import SimulationControls from './components/SimulationControls'
+import SimulationRenderer from './components/SimulationRenderer'
 
 // Constants for simulation dimensions
 const WIDTH = 512
@@ -110,71 +111,17 @@ export default function MinimalComputeTest() {
   }, [resetFlag])
 
   /*** ————————————————————————
-   * Instanced Mesh Initialization
-   * ———————————————————————— */
-  useEffect(() => {
-    if (!meshRef.current) return
-
-    const mesh = meshRef.current
-    const dummy = new THREE.Object3D()
-    const spacing = 0.05
-    const offsetX = (WIDTH - 1) * spacing * 0.5
-    const offsetY = (HEIGHT - 1) * spacing * 0.5
-
-    // Position each instance in a grid
-    for (let i = 0; i < COUNT; i++) {
-      const x = i % WIDTH
-      const y = Math.floor(i / WIDTH)
-
-      dummy.position.set(x * spacing - offsetX, y * spacing - offsetY, 0)
-      dummy.updateMatrix()
-      mesh.setMatrixAt(i, dummy.matrix)
-    }
-
-    mesh.instanceMatrix.needsUpdate = true
-  }, [])
-
-  /*** ————————————————————————
-   * Shader Output Nodes (Color & Opacity)
-   * ———————————————————————— */
-
-  // Fade from white to black based on cell state
-  const fadedColorNode = readStateRef.current
-    ? (() => {
-        const stateElement = storage(readStateRef.current, 'float', COUNT).element(instanceIndex)
-        const threshold = 0.05
-        const fadeWidth = 0.05
-        const fadeFactor = stateElement.smoothstep(threshold, threshold + fadeWidth)
-
-        return vec3(1, 1, 1).sub(vec3(1, 1, 1).mul(fadeFactor)) // inverse brightness
-      })()
-    : vec3(1, 1, 1)
-
-  // Opacity fades in with smoothstep
-  const opacityFadeNode = readStateRef.current
-    ? (() => {
-        const stateElement = storage(readStateRef.current, 'float', COUNT).element(instanceIndex)
-        const threshold = 0.05
-        const fadeWidth = 0.05
-        return stateElement.smoothstep(threshold, threshold + fadeWidth)
-      })()
-    : vec3(1)
-
-  /*** ————————————————————————
    * JSX Output
    * ———————————————————————— */
   return (
     <>
-      <instancedMesh ref={meshRef} args={[undefined, undefined, COUNT]}>
-        <planeGeometry args={[0.04, 0.04]} />
-        <meshBasicNodeMaterial
-          colorNode={fadedColorNode}
-          opacityNode={opacityFadeNode}
-          transparent={true}
-          depthWrite={false}
-        />
-      </instancedMesh>
-
+      <SimulationRenderer
+        meshRef={meshRef}
+        readStateBuffer={readStateRef.current}
+        instanceCount={COUNT}
+        width={WIDTH}
+        height={HEIGHT}
+      />
       <SimulationControls
         onPlay={() => setIsRunning(true)}
         onPause={() => setIsRunning(false)}
