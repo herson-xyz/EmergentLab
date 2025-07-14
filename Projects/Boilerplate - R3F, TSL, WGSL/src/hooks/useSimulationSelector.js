@@ -1,19 +1,14 @@
-// useSimulationSelector.js
 import { useControls } from 'leva'
-import { simulationRegistry } from '../simulationRegistry'
 
 export function useSimulationSelector() {
-  const { simulation } = useControls('Simulation', {
-    simulation: {
-      options: Object.keys(simulationRegistry),
-      value: 'SmoothLife'
+  return useControls('Simulation', {
+    simulationType: {
+      label: 'Shader',
+      options: {
+        SmoothLife: 'smooth',
+        Lenia: 'lenia'
+      },
+      value: 'smooth'
     }
   })
-
-  const selected = simulationRegistry[simulation]
-
-  return {
-    simulationKey: simulation,
-    ...selected
-  }
 }

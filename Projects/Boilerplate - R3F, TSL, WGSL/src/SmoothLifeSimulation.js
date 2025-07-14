@@ -1,12 +1,14 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import { wgslFn, storage, instanceIndex, vec3 } from 'three/tsl'
 
 import smoothLifeWGSL from './shaders/smoothLife.wgsl?raw'
+import leniaWGSL from './shaders/lenia.wgsl?raw'
 import { useSmoothLifeState } from './hooks/useSmoothLifeState'
 import { useSmoothLifeCompute } from './hooks/useSmoothLifeCompute'
 import { useShaderParameterControls } from './hooks/useShaderParameterControls'
+import { useSimulationSelector } from './hooks/useSimulationSelector'
 import SimulationControls from './components/SimulationControls'
 import SimulationRenderer from './components/SimulationRenderer'
 
@@ -35,6 +37,18 @@ export default function MinimalComputeTest() {
   // Leva GUI controls for shader parameters
   const params = useShaderParameterControls()
 
+  // Leva GUI controls for simulation type
+  const { simulationType } = useSimulationSelector()
+  const computeShader = useMemo(() => {
+    switch (simulationType) {
+      case 'lenia':
+        return wgslFn(leniaWGSL)
+      case 'smooth':
+      default:
+        return wgslFn(smoothLifeWGSL)
+    }
+  }, [simulationType])
+
   // State buffers and uniform values for the simulation
   const {
     debugVec2Buffer,
@@ -60,7 +74,8 @@ export default function MinimalComputeTest() {
    * ———————————————————————— */
   useSmoothLifeCompute({
     renderer,
-    computeShader: wgslFn(smoothLifeWGSL),
+    computeShader,
+    simulationType,
     params,
     buffers: {
       debugVec2Buffer,
@@ -83,32 +98,6 @@ export default function MinimalComputeTest() {
     resetFlag,
     setResetFlag
   })
-
-  /*** ————————————————————————
-   * Reset Simulation on User Request
-   * ———————————————————————— */
-  useEffect(() => {
-    if (!resetFlag) return
-
-    // Fill buffer A with random float values, clear B
-    const newState = new Float32Array(COUNT)
-    for (let i = 0; i < COUNT; i++) {
-      newState[i] = Math.random()
-    }
-
-    cellStateBufferA.array.set(newState)
-    cellStateBufferB.array.fill(0)
-
-    cellStateBufferA.needsUpdate = true
-    cellStateBufferB.needsUpdate = true
-
-    // Update read/write buffer refs
-    readStateRef.current = cellStateBufferA
-    writeStateRef.current = cellStateBufferB
-
-    // Reset flag
-    setResetFlag(false)
-  }, [resetFlag])
 
   /*** ————————————————————————
    * JSX Output

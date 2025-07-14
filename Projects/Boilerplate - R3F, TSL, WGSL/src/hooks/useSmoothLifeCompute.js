@@ -7,6 +7,7 @@ import { storage, instanceIndex } from 'three/tsl'
 export function useSmoothLifeCompute({
   renderer,
   computeShader,
+  simulationType,
   params,
   buffers,
   uniforms,
@@ -80,15 +81,22 @@ export function useSmoothLifeCompute({
       // })
     }
 
-    const id = requestAnimationFrame(function tick() {
+    let id
+
+    function tick() {
       loop()
-      requestAnimationFrame(tick)
-    })
-
+      id = requestAnimationFrame(tick)
+    }
+  
+    id = requestAnimationFrame(tick)
+  
     return () => cancelAnimationFrame(id)
-  }, [renderer, isRunning, params])
+  }, [renderer, isRunning, params, computeShader])
 
-  // Reset simulation when resetFlag is triggered
+    /*** ————————————————————————
+   * Reset Simulation on User Request
+   * ———————————————————————— */
+
   useEffect(() => {
     if (!resetFlag) return
 
@@ -106,4 +114,8 @@ export function useSmoothLifeCompute({
 
     setResetFlag(false)
   }, [resetFlag])
+
+  useEffect(() => {
+    setResetFlag(true); // will trigger the existing reset effect
+  }, [simulationType]);  
 }
