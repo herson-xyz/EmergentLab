@@ -29,8 +29,24 @@ export function useSimulationState() {
     )
 
     // Float state buffer initialized with random values
+    ///////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////
+
     const initialState = new Float32Array(dimensions.COUNT)
-    for (let i = 0; i < dimensions.COUNT; i++) initialState[i] = Math.random()
+
+    for (let i = 0; i < dimensions.COUNT; i++) {
+      const x = i % dimensions.WIDTH
+      const y = Math.floor(i / dimensions.WIDTH)
+    
+      // Checkerboard pattern of midrange values
+      const isOn = (x + y) % 2 === 0
+      initialState[i] = isOn ? 0.6 : 0.4
+    }
+    
+    ///////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////
 
     const cellStateBufferA = new THREE.StorageInstancedBufferAttribute(initialState, 1)
     const cellStateBufferB = new THREE.StorageInstancedBufferAttribute(new Float32Array(dimensions.COUNT), 1)
