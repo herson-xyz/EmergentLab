@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { storage, instanceIndex } from 'three/tsl'
+import { dimensions } from '../constants/dimensions'
 
 /**
  * Manages the SmoothLife compute shader loop and buffer updates.
@@ -11,7 +12,6 @@ export function useSimulationCompute({
   params,
   buffers,
   uniforms,
-  dimensions,
   isRunning,
   resetFlag,
   setResetFlag

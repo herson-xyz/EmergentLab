@@ -9,13 +9,9 @@ import { useSimulationState } from './hooks/useSimulationState'
 import { useSimulationCompute } from './hooks/useSimulationCompute'
 import { useSimulationParameterControls } from './hooks/useSimulationParameterControls'
 import { useSimulationSelector } from './hooks/useSimulationSelector'
+import { dimensions } from './constants/dimensions'
 import SimulationControls from './components/SimulationControls'
 import SimulationRenderer from './components/SimulationRenderer'
-
-// Constants for simulation dimensions
-const WIDTH = 512
-const HEIGHT = 512
-const COUNT = WIDTH * HEIGHT
 
 export default function MinimalComputeTest() {
   /*** ————————————————————————
@@ -89,11 +85,7 @@ export default function MinimalComputeTest() {
       B1, B2, D1, D2, M, alpha, beta,
       gridSizeTSL
     },
-    dimensions: {
-      WIDTH,
-      HEIGHT,
-      COUNT
-    },
+    dimensions,
     isRunning,
     resetFlag,
     setResetFlag
@@ -107,9 +99,6 @@ export default function MinimalComputeTest() {
       <SimulationRenderer
         meshRef={meshRef}
         readStateBuffer={readStateRef.current}
-        instanceCount={COUNT}
-        width={WIDTH}
-        height={HEIGHT}
       />
       <SimulationControls
         onPlay={() => setIsRunning(true)}
