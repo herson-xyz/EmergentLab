@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "dependencies": {
+    "gsap": "*",
+    "lil-gui": "^0.18.1",
+    "three": "*",
+    "vite-plugin-glsl": "^1.1.2"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

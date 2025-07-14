@@ -15,7 +15,7 @@ This is a collection of experiments inspired by emergent, self-organizing system
 
 ![Game of Life](./documentation/images/2025/03/2025-03-02-02.png)
 
-## [Game of Life, meet WebGPU]
+## Game of Life, meet WebGPU
 ### [Commit](./Game%20of%20Life/Game%20of%20Life%2C%20meet%20WebGPU/)
 ### [Documentation](https://notes.serfugaz.xyz/Journal/2025/03/2025-03-05)
 
