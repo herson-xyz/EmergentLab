@@ -4,7 +4,7 @@ import { storage, instanceIndex } from 'three/tsl'
 /**
  * Manages the SmoothLife compute shader loop and buffer updates.
  */
-export function useSmoothLifeCompute({
+export function useSimulationCompute({
   renderer,
   computeShader,
   simulationType,

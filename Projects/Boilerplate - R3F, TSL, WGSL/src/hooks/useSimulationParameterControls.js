@@ -1,6 +1,6 @@
 import { useControls } from 'leva'
 
-export function useShaderParameterControls() {
+export function useSimulationParameterControls() {
   const params = useControls('Shader Params', {
     innerRadius: { value: 1.0, min: 0.0, max: 5.0, step: 0.01 },
     outerRadius: { value: 3.0, min: 0.0, max: 10.0, step: 0.01 },

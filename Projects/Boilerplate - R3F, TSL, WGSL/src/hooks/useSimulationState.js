@@ -10,7 +10,7 @@ const COUNT = WIDTH * HEIGHT
 /**
  * Hook to initialize and manage the state of the SmoothLife compute simulation.
  */
-export function useSmoothLifeState() {
+export function useSimulationState() {
   return useMemo(() => {
     // === Uniforms for shader ===
     const gridSizeTSL = uniform(WIDTH)

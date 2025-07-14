@@ -5,9 +5,9 @@ import { wgslFn, storage, instanceIndex, vec3 } from 'three/tsl'
 
 import smoothLifeWGSL from './shaders/smoothLife.wgsl?raw'
 import leniaWGSL from './shaders/lenia.wgsl?raw'
-import { useSmoothLifeState } from './hooks/useSmoothLifeState'
-import { useSmoothLifeCompute } from './hooks/useSmoothLifeCompute'
-import { useShaderParameterControls } from './hooks/useShaderParameterControls'
+import { useSimulationState } from './hooks/useSimulationState'
+import { useSimulationCompute } from './hooks/useSimulationCompute'
+import { useSimulationParameterControls } from './hooks/useSimulationParameterControls'
 import { useSimulationSelector } from './hooks/useSimulationSelector'
 import SimulationControls from './components/SimulationControls'
 import SimulationRenderer from './components/SimulationRenderer'
@@ -35,7 +35,7 @@ export default function MinimalComputeTest() {
   const [resetFlag, setResetFlag] = useState(false)
 
   // Leva GUI controls for shader parameters
-  const params = useShaderParameterControls()
+  const params = useSimulationParameterControls()
 
   // Leva GUI controls for simulation type
   const { simulationType } = useSimulationSelector()
@@ -59,7 +59,7 @@ export default function MinimalComputeTest() {
     innerRadius,
     outerRadius,
     B1, B2, D1, D2, M, alpha, beta
-  } = useSmoothLifeState()
+  } = useSimulationState()
 
   /*** ————————————————————————
    * Initial State Buffer Setup
@@ -72,7 +72,7 @@ export default function MinimalComputeTest() {
   /*** ————————————————————————
    * Compute Shader Simulation Hook
    * ———————————————————————— */
-  useSmoothLifeCompute({
+  useSimulationCompute({
     renderer,
     computeShader,
     simulationType,
