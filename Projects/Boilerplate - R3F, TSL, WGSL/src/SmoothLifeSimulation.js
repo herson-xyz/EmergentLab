@@ -30,9 +30,6 @@ export default function MinimalComputeTest() {
   const [isRunning, setIsRunning] = useState(true)
   const [resetFlag, setResetFlag] = useState(false)
 
-  // Leva GUI controls for shader parameters
-  const params = useSimulationParameterControls()
-
   // Leva GUI controls for simulation type
   const { simulationType } = useSimulationSelector()
   const computeShader = useMemo(() => {
@@ -45,6 +42,9 @@ export default function MinimalComputeTest() {
     }
   }, [simulationType])
 
+  // Leva GUI controls for shader parameters - conditional based on simulation type
+  const params = useSimulationParameterControls(simulationType)
+
   // State buffers and uniform values for the simulation
   const {
     debugVec2Buffer,
@@ -54,7 +54,8 @@ export default function MinimalComputeTest() {
     gridSizeTSL,
     innerRadius,
     outerRadius,
-    B1, B2, D1, D2, M, alpha, beta
+    B1, B2, D1, D2, M, alpha, beta,
+    R, T, leniaM, S
   } = useSimulationState()
 
   /*** ————————————————————————
@@ -83,6 +84,7 @@ export default function MinimalComputeTest() {
       innerRadius,
       outerRadius,
       B1, B2, D1, D2, M, alpha, beta,
+      R, T, leniaM, S,
       gridSizeTSL
     },
     dimensions,

@@ -3,21 +3,22 @@ fn compute(
   cellStateOut: ptr<storage, array<f32>, read_write>,
   cellGridCoords: ptr<storage, array<vec2u>, read_write>,
   index: u32,
-  gridSize: u32
+  gridSize: u32,
+  R: f32,
+  T: f32,
+  M: f32,
+  S: f32
 ) -> void {
   let pos = (*cellGridCoords)[index];
 
   var neighborStateSum: f32 = 0.0;
   var kernelSum: f32 = 0.0;
 
-  let R: i32 = 13;
-  let T: f32 = 10.0;
-  let M: f32 = 0.15;
-  let S: f32 = 0.015;
+  let radius: i32 = i32(R);
 
-  for (var dx: i32 = -R; dx <= R; dx++) {
-    for (var dy: i32 = -R; dy <= R; dy++) {
-      let dist = sqrt(f32(dx * dx + dy * dy)) / f32(R);
+  for (var dx: i32 = -radius; dx <= radius; dx++) {
+    for (var dy: i32 = -radius; dy <= radius; dy++) {
+      let dist = sqrt(f32(dx * dx + dy * dy)) / R;
       if (dist >= 1.0) {
         continue;
       }

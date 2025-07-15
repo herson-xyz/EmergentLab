@@ -10,6 +10,8 @@ export function useSimulationState() {
   return useMemo(() => {
     // === Uniforms for shader ===
     const gridSizeTSL = uniform(dimensions.WIDTH)
+    
+    // SmoothLife uniforms
     const innerRadius = uniform(1.0)
     const outerRadius = uniform(3.0)
     const B1 = uniform(0.278)
@@ -19,6 +21,12 @@ export function useSimulationState() {
     const M = uniform(2.0)
     const alpha = uniform(0.03)
     const beta = uniform(0.07)
+    
+    // Lenia uniforms
+    const R = uniform(13.0)
+    const T = uniform(10.0)
+    const leniaM = uniform(0.15)
+    const S = uniform(0.015)
 
     // === Buffers ===
 
@@ -82,6 +90,10 @@ export function useSimulationState() {
       M,
       alpha,
       beta,
+      R,
+      T,
+      leniaM,
+      S,
       ...dimensions
     }
   }, [])
