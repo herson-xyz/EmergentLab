@@ -42,7 +42,7 @@ export default function MinimalComputeTest() {
   }, [simulationType])
 
   // Get parameters from the dedicated component
-  const params = SimulationParameters()
+  const params = SimulationParameters(simulationType)
 
   // State buffers and uniform values for the simulation
   const {
