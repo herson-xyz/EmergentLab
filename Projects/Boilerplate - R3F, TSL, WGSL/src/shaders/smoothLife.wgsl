@@ -1,5 +1,4 @@
 fn compute(
-    debugVec2Out: ptr<storage, array<vec2f>, read_write>,
     cellStateIn: ptr<storage, array<f32>, read_write>,
     cellStateOut: ptr<storage, array<f32>, read_write>,
     cellGridCoords: ptr<storage, array<vec2u>, read_write>,
@@ -59,5 +58,4 @@ fn compute(
     let newVal = clamp(newAlive, 0.0, 1.0);
 
     (*cellStateOut)[index] = newVal;
-    (*debugVec2Out)[index] = vec2f(innerAvg, outerAvg);
 }

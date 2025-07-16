@@ -6,12 +6,13 @@ import { useControls } from 'leva'
 
 import smoothLifeWGSL from './shaders/smoothLife.wgsl?raw'
 import leniaWGSL from './shaders/lenia.wgsl?raw'
-import { useSimulationState } from './hooks/useSimulationState'
+import { useSimulationState } from './hooks/useSimulationInitialState'
 import { useSimulationCompute } from './hooks/useSimulationCompute'
 import { useSimulationSelector } from './hooks/useSimulationSelector'
 import { dimensions } from './constants/dimensions'
 import SimulationControls from './components/SimulationControls'
 import SimulationRenderer from './components/SimulationRenderer'
+import SimulationParameters from './components/SimulationParameters'
 
 export default function MinimalComputeTest() {
   /*** ————————————————————————
@@ -21,8 +22,6 @@ export default function MinimalComputeTest() {
   const renderer = gl
 
   const meshRef = useRef()
-  const readStateRef = useRef()
-  const writeStateRef = useRef()
 
   /*** ————————————————————————
    * Simulation State Controls
@@ -42,45 +41,15 @@ export default function MinimalComputeTest() {
     }
   }, [simulationType])
 
-  // Leva GUI controls for shader parameters - simple approach with all parameters visible
-  const params = useControls({
-    // SmoothLife parameters
-    innerRadius: { value: 1.0, min: 0.0, max: 5.0, step: 0.01 },
-    outerRadius: { value: 3.0, min: 0.0, max: 10.0, step: 0.01 },
-    B1: { value: 0.278, min: 0.0, max: 1.0, step: 0.001 },
-    B2: { value: 0.365, min: 0.0, max: 1.0, step: 0.001 },
-    D1: { value: 0.278, min: 0.0, max: 1.0, step: 0.001 },
-    D2: { value: 0.445, min: 0.0, max: 1.0, step: 0.001 },
-    M:  { value: 2.0,   min: 0.0, max: 10.0, step: 0.01 },
-    alpha: { value: 0.03, min: 0.0, max: 1.0, step: 0.001 },
-    beta:  { value: 0.07, min: 0.0, max: 1.0, step: 0.001 },
-    // Lenia parameters
-    R: { value: 13.0, min: 1.0, max: 30.0, step: 0.5 },
-    T: { value: 10.0, min: 1.0, max: 50.0, step: 0.1 },
-    leniaM: { value: 0.15, min: 0.0, max: 1.0, step: 0.001 },
-    S: { value: 0.015, min: 0.001, max: 0.1, step: 0.001 },
-  })
+  // Get parameters from the dedicated component
+  const params = SimulationParameters()
 
   // State buffers and uniform values for the simulation
   const {
-    debugVec2Buffer,
     cellStateBufferA,
     cellStateBufferB,
-    cellGridCoordBuffer,
-    gridSizeTSL,
-    innerRadius,
-    outerRadius,
-    B1, B2, D1, D2, M, alpha, beta,
-    R, T, leniaM, S
+    cellGridCoordBuffer
   } = useSimulationState()
-
-  /*** ————————————————————————
-   * Initial State Buffer Setup
-   * ———————————————————————— */
-  useEffect(() => {
-    readStateRef.current = cellStateBufferA
-    writeStateRef.current = cellStateBufferB
-  }, [])
 
   /*** ————————————————————————
    * Compute Shader Simulation Hook
@@ -91,19 +60,10 @@ export default function MinimalComputeTest() {
     simulationType,
     params,
     buffers: {
-      debugVec2Buffer,
       cellStateBufferA,
       cellStateBufferB,
       cellGridCoordBuffer
     },
-    uniforms: {
-      innerRadius,
-      outerRadius,
-      B1, B2, D1, D2, M, alpha, beta,
-      R, T, leniaM, S,
-      gridSizeTSL
-    },
-    dimensions,
     isRunning,
     resetFlag,
     setResetFlag
@@ -116,7 +76,7 @@ export default function MinimalComputeTest() {
     <>
       <SimulationRenderer
         meshRef={meshRef}
-        readStateBuffer={readStateRef.current}
+        readStateBuffer={cellStateBufferA}
       />
       <SimulationControls
         onPlay={() => setIsRunning(true)}
