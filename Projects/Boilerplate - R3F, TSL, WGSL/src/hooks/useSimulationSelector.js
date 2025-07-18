@@ -5,7 +5,8 @@ export function useSimulationSelector() {
     simulationType: {
       label: 'Shader',
       options: {
-        SmoothLife: 'smooth',
+        'SmoothLife v1': 'smooth',
+        'SmoothLife v2': 'smoothv2',
         Lenia: 'lenia'
       },
       value: 'smooth'

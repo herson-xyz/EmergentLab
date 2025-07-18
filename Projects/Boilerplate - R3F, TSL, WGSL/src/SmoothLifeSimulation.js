@@ -4,7 +4,8 @@ import * as THREE from 'three/webgpu'
 import { wgslFn, storage, instanceIndex, vec3 } from 'three/tsl'
 import { useControls } from 'leva'
 
-import smoothLifeWGSL from './shaders/smoothLife.wgsl?raw'
+import smoothLifeWGSLv1 from './shaders/smoothLifev1.wgsl?raw'
+import smoothLifeWGSLv2 from './shaders/smoothLifev2.wgsl?raw'
 import leniaWGSL from './shaders/lenia.wgsl?raw'
 import { useSimulationState } from './hooks/useSimulationInitialState'
 import { useSimulationCompute } from './hooks/useSimulationCompute'
@@ -35,9 +36,11 @@ export default function MinimalComputeTest() {
     switch (simulationType) {
       case 'lenia':
         return wgslFn(leniaWGSL)
+      case 'smoothv2':
+        return wgslFn(smoothLifeWGSLv2)
       case 'smooth':
       default:
-        return wgslFn(smoothLifeWGSL)
+        return wgslFn(smoothLifeWGSLv1)
     }
   }, [simulationType])
 
