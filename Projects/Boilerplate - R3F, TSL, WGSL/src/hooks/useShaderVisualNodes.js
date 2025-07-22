@@ -15,7 +15,8 @@ export default function useShaderVisualNodes(readStateBuffer, COUNT) {
     const fadeWidth = 0.05
     const fadeFactor = stateElement.smoothstep(threshold, threshold + fadeWidth)
 
-    const fadedColorNode = vec3(1, 1, 1).sub(vec3(1, 1, 1).mul(fadeFactor))
+    // const fadedColorNode = vec3(1, 1, 1).sub(vec3(1, 1, 1).mul(fadeFactor))
+    const fadedColorNode = vec3(0, 1, 1)
     const opacityFadeNode = fadeFactor
 
     return { fadedColorNode, opacityFadeNode }

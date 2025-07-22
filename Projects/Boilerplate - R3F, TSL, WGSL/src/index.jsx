@@ -23,12 +23,15 @@ root.render(
             renderer.toneMapping = THREE.NoToneMapping
 
             // ✅ Set white background
-            renderer.setClearColor(0xffffff)
+            renderer.setClearColor(0x000000)
+            //            renderer.setClearColor(0xccccff)
+
 
             return renderer
         }}
     >
         <ambientLight intensity={0.5} />
+        {/* <directionalLight position={[10, 10, 5]} intensity={3} castShadow shadow-mapSize={[1024, 1024]} /> */}
         <RefractionMesh />
         <SmoothLifeSimulation />
         <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
