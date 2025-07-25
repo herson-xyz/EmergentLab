@@ -15,12 +15,18 @@ export default function SimulationParameters(simulationType) {
     }, { collapsed: true }), // 👈 collapsed by default
 
     'SmoothLife v2': folder({
+      // innerRadiusV2: { value: 3, min: 0, max: 10, step: 1 },
+      // outerRadiusV2: { value: 12, min: 0, max: 20, step: 1 },
+      // B1V2: { value: 0.30, min: 0.0, max: 1.0, step: 0.001},
+      // B2V2: { value: 0.33, min: 0.0, max: 1.0, step: 0.001},
+      // D1V2: { value: 0.33, min: 0.0, max: 1.0, step: 0.001},
+      // D2V2: { value: 0.54, min: 0.0, max: 1.0, step: 0.001},
       innerRadiusV2: { value: 3, min: 0, max: 10, step: 1 },
-      outerRadiusV2: { value: 10, min: 0, max: 20, step: 1 },
-      B1V2: { value: 0.257, min: 0.0, max: 1.0, step: 0.001},
-      B2V2: { value: 0.336, min: 0.0, max: 1.0, step: 0.001},
-      D1V2: { value: 0.365, min: 0.0, max: 1.0, step: 0.001},
-      D2V2: { value: 0.549, min: 0.0, max: 1.0, step: 0.001},
+      outerRadiusV2: { value: 12, min: 0, max: 20, step: 1 },
+      B1V2: { value: 0.23, min: 0.0, max: 1.0, step: 0.001},
+      B2V2: { value: 0.26, min: 0.0, max: 1.0, step: 0.001},
+      D1V2: { value: 0.26, min: 0.0, max: 1.0, step: 0.001},
+      D2V2: { value: 0.47, min: 0.0, max: 1.0, step: 0.001},
     }, { collapsed: true }), // 👈 collapsed by default
 
     Lenia: folder({

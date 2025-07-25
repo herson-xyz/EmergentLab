@@ -12,7 +12,7 @@ fn compute(
   d2: f32
 ) -> void {
   let pos = (*cellGridCoords)[index];
-  let dt: f32 = 0.003;
+  let dt: f32 = 0.3;
 
   // === Begin CalculateNeighbors (inlined) ===
   let cell = vec2f(pos);
@@ -50,7 +50,7 @@ fn compute(
   // === End CalculateNeighbors ===
 
   // === Begin life_dynamics_function (inlined) ===
-  let steepness: f32 = 0.02;
+  let steepness: f32 = 0.001;
 
   let life_activation_inner = 1.0 / (1.0 + exp(-(innerAvg - 0.5) * (4.0 / steepness)));
   let adaptive1 = b1 * (1.0 - life_activation_inner) + d1 * life_activation_inner;
@@ -62,6 +62,8 @@ fn compute(
   let rateOfChange = life_activation_outer1 * (1.0 - life_activation_outer2);
   // === End life_dynamics_function ===
 
-  let newCellState = rateOfChange + dt * (2.0 * rateOfChange - 1.0);
+  let currentState = (*cellStateIn)[index];
+  let newCellState = currentState + dt * (rateOfChange - currentState);
+
   (*cellStateOut)[index] = newCellState;
 }

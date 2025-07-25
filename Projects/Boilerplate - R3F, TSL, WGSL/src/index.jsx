@@ -3,7 +3,9 @@ import { Canvas, extend } from '@react-three/fiber'
 import { createRoot } from 'react-dom/client'
 import * as THREE from 'three/webgpu'
 import SmoothLifeSimulation from './SmoothLifeSimulation'
-import { Environment, OrbitControls } from '@react-three/drei'
+import { OrbitControls } from '@react-three/drei'
+// import { EffectComposer, Scanline, Noise, ChromaticAberration, Vignette } from '@react-three/postprocessing'
+// import { BlendFunction } from 'postprocessing'
 import RefractionMesh from './components/RefractionMesh'
 extend(THREE)
 
@@ -35,5 +37,14 @@ root.render(
         <RefractionMesh />
         <SmoothLifeSimulation />
         <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+        {/* <EffectComposer>
+            <Scanline blendFunction={BlendFunction.OVERLAY} density={1.2} />
+            <Noise opacity={0.1} />
+            <ChromaticAberration
+                offset={[0.001, 0.001]}
+                blendFunction={BlendFunction.NORMAL}
+            />
+            <Vignette eskil={false} offset={0.3} darkness={0.9} />
+        </EffectComposer> */}
     </Canvas>
 )
