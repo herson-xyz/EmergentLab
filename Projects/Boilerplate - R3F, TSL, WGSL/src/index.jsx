@@ -4,9 +4,9 @@ import { createRoot } from 'react-dom/client'
 import * as THREE from 'three/webgpu'
 import SmoothLifeSimulation from './SmoothLifeSimulation'
 import { OrbitControls } from '@react-three/drei'
-// import { EffectComposer, Scanline, Noise, ChromaticAberration, Vignette } from '@react-three/postprocessing'
-// import { BlendFunction } from 'postprocessing'
 import RefractionMesh from './components/RefractionMesh'
+import RenderTargetPass from './components/RenderTargetPass'
+
 extend(THREE)
 
 const root = createRoot(document.getElementById('root'))
@@ -32,19 +32,11 @@ root.render(
             return renderer
         }}
     >
+        <RenderTargetPass />
         <ambientLight intensity={0.5} />
         {/* <directionalLight position={[10, 10, 5]} intensity={3} castShadow shadow-mapSize={[1024, 1024]} /> */}
         <RefractionMesh />
         <SmoothLifeSimulation />
         <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
-        {/* <EffectComposer>
-            <Scanline blendFunction={BlendFunction.OVERLAY} density={1.2} />
-            <Noise opacity={0.1} />
-            <ChromaticAberration
-                offset={[0.001, 0.001]}
-                blendFunction={BlendFunction.NORMAL}
-            />
-            <Vignette eskil={false} offset={0.3} darkness={0.9} />
-        </EffectComposer> */}
     </Canvas>
 )
