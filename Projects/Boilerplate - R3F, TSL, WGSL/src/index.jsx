@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useState } from 'react'
 import { Canvas, extend } from '@react-three/fiber'
 import { createRoot } from 'react-dom/client'
 import * as THREE from 'three/webgpu'
@@ -6,8 +6,24 @@ import SmoothLifeSimulation from './SmoothLifeSimulation'
 import { OrbitControls } from '@react-three/drei'
 import RefractionMesh from './components/RefractionMesh'
 import RenderTargetPass from './components/RenderTargetPass'
+import FullscreenQuad from './components/FullscreenQuad'
 
 extend(THREE)
+
+function MainScene() {
+  const renderTargetRef = useRef();
+  const [texture, setTexture] = useState();
+  return (
+    <>
+      <RenderTargetPass renderTargetRef={renderTargetRef} setTexture={setTexture} />
+      <ambientLight intensity={0.2} />
+      <RefractionMesh />
+      <SmoothLifeSimulation />
+      <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+      <FullscreenQuad texture={texture} />
+    </>
+  );
+}
 
 const root = createRoot(document.getElementById('root'))
 root.render(
@@ -28,15 +44,9 @@ root.render(
             renderer.setClearColor(0x000000)
             //            renderer.setClearColor(0xccccff)
 
-
             return renderer
         }}
     >
-        <RenderTargetPass />
-        <ambientLight intensity={0.5} />
-        {/* <directionalLight position={[10, 10, 5]} intensity={3} castShadow shadow-mapSize={[1024, 1024]} /> */}
-        <RefractionMesh />
-        <SmoothLifeSimulation />
-        <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+        <MainScene />
     </Canvas>
 )
