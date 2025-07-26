@@ -44,6 +44,14 @@ export default function SimulationOrchestrator() {
 
   // Get parameters from the dedicated component
   const params = SimulationParameters(simulationType)
+  
+  // Extract visualization parameters from the nested structure
+  const visualizationParams = params?.Visualization?.['Display Settings'] || {
+    threshold: 0.05,
+    fadeWidth: 0.2
+  }
+  
+
 
   // State buffers and uniform values for the simulation
   const {
@@ -78,6 +86,8 @@ export default function SimulationOrchestrator() {
       <SimulationGrid
         meshRef={meshRef}
         readStateBuffer={cellStateBufferA}
+        threshold={visualizationParams.threshold}
+        fadeWidth={visualizationParams.fadeWidth}
       />
       <SimulationControls
         onPlay={() => setIsRunning(true)}
