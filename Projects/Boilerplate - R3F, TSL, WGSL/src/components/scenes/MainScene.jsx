@@ -1,9 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react'
 import SimulationOrchestrator from '../simulation/SimulationOrchestrator'
 import { OrbitControls } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
 import { RefractionMesh, RenderTargetPass, FullscreenQuad } from '../rendering'
 
 export default function MainScene() {
+  const { camera } = useThree();
   const renderTargetRef = useRef();
   const [texture, setTexture] = useState();
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -28,7 +30,17 @@ export default function MainScene() {
       <ambientLight intensity={2} />
       {/* <RefractionMesh /> */}
       <SimulationOrchestrator />
-      <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+      
+      {/* OrbitControls only in fullscreen mode */}
+      {isFullscreen && (
+        <OrbitControls 
+          camera={camera}
+          enablePan={true} 
+          enableZoom={true} 
+          enableRotate={true}
+        />
+      )}
+      
       {!isFullscreen && <FullscreenQuad texture={texture} />}
     </>
   );

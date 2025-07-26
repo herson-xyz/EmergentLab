@@ -23,14 +23,15 @@ export default function RenderTargetPass({ renderTargetRef, setTexture, isFullsc
     // Create a perspective camera for the render target using constants
     renderTargetCameraRef.current = new THREE.PerspectiveCamera(
       RENDER_TARGET_CAMERA.fov,
-      RENDER_TARGET_CAMERA.aspect,
+      1, // Fixed aspect ratio of 1 for square render target
       RENDER_TARGET_CAMERA.near,
       RENDER_TARGET_CAMERA.far
     );
-    renderTargetCameraRef.current.position.copy(camera.position);
-    renderTargetCameraRef.current.rotation.copy(camera.rotation);
-    renderTargetCameraRef.current.up.copy(camera.up);
+    
+    // Set fixed position for render target camera
+    renderTargetCameraRef.current.position.set(0, 0, 8);
     renderTargetCameraRef.current.lookAt(0, 0, 0);
+    renderTargetCameraRef.current.updateProjectionMatrix();
     
     // Clean up on unmount
     return () => {
@@ -38,7 +39,7 @@ export default function RenderTargetPass({ renderTargetRef, setTexture, isFullsc
         renderTargetRef.current.dispose();
       }
     };
-  }, [renderTargetRef, setTexture, camera.fov, camera.near, camera.far, camera.position, camera.rotation, camera.up]);
+  }, [renderTargetRef, setTexture]);
 
   // Handle texture cleanup when switching modes
   useEffect(() => {
@@ -60,13 +61,8 @@ export default function RenderTargetPass({ renderTargetRef, setTexture, isFullsc
         return;
     }
     
-    // Sync the render target camera to the main camera (for controls)
-    renderTargetCameraRef.current.position.copy(camera.position);
-    renderTargetCameraRef.current.position.z += 0;
-    renderTargetCameraRef.current.rotation.copy(camera.rotation);
-    renderTargetCameraRef.current.up.copy(camera.up);
-    renderTargetCameraRef.current.updateProjectionMatrix();
-    // Render to the render target with the RT camera
+    // Render to the render target with fixed camera position
+    // No need to copy main camera - render target camera stays fixed
     gl.setRenderTarget(renderTargetRef.current);
     gl.setClearColor(0x000000); // Black for the render target
     gl.clear();
