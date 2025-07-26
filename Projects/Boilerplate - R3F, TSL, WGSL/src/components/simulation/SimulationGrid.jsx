@@ -1,9 +1,9 @@
 import { useEffect, memo } from 'react'
 import * as THREE from 'three/webgpu'
-import useShaderVisualNodes from '../hooks/useShaderVisualNodes'
-import { dimensions } from '../constants/dimensions'
+import useShaderVisualNodes from '../../hooks/useShaderVisualNodes'
+import { dimensions } from '../../constants/dimensions'
 
-export default memo(function SmoothLifeRenderer({
+export default memo(function SimulationGrid({
   meshRef,
   readStateBuffer,
   spacing = 0.05

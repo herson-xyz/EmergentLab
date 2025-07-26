@@ -4,18 +4,16 @@ import * as THREE from 'three/webgpu'
 import { wgslFn, storage, instanceIndex, vec3 } from 'three/tsl'
 import { useControls } from 'leva'
 
-import smoothLifeWGSLv1 from './shaders/smoothLifev1.wgsl?raw'
-import smoothLifeWGSLv2 from './shaders/smoothLifev2.wgsl?raw'
-import leniaWGSL from './shaders/lenia.wgsl?raw'
-import { useSimulationState } from './hooks/useSimulationInitialState'
-import { useSimulationCompute } from './hooks/useSimulationCompute'
-import { useSimulationSelector } from './hooks/useSimulationSelector'
-import { dimensions } from './constants/dimensions'
-import SimulationControls from './components/SimulationControls'
-import SimulationRenderer from './components/SimulationRenderer'
-import SimulationParameters from './components/SimulationParameters'
+import smoothLifeWGSLv1 from '../../shaders/smoothLifev1.wgsl?raw'
+import smoothLifeWGSLv2 from '../../shaders/smoothLifev2.wgsl?raw'
+import leniaWGSL from '../../shaders/lenia.wgsl?raw'
+import { useSimulationState } from '../../hooks/useSimulationInitialState'
+import { useSimulationCompute } from '../../hooks/useSimulationCompute'
+import { useSimulationSelector } from '../../hooks/useSimulationSelector'
+import { dimensions } from '../../constants/dimensions'
+import { Controls as SimulationControls, SimulationGrid, Parameters as SimulationParameters } from '../'
 
-export default function MinimalComputeTest() {
+export default function SimulationOrchestrator() {
   /*** ————————————————————————
    * References and WebGPU Renderer
    * ———————————————————————— */
@@ -77,7 +75,7 @@ export default function MinimalComputeTest() {
    * ———————————————————————— */
   return (
     <>
-      <SimulationRenderer
+      <SimulationGrid
         meshRef={meshRef}
         readStateBuffer={cellStateBufferA}
       />
