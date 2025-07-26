@@ -28,7 +28,7 @@ export default function MainScene() {
       <ambientLight intensity={2} />
       {/* <RefractionMesh /> */}
       <SimulationOrchestrator />
-      {/* <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} /> */}
+      <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
       {!isFullscreen && <FullscreenQuad texture={texture} />}
     </>
   );

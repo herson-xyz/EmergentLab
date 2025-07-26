@@ -62,7 +62,7 @@ export default function RenderTargetPass({ renderTargetRef, setTexture, isFullsc
     
     // Sync the render target camera to the main camera (for controls)
     renderTargetCameraRef.current.position.copy(camera.position);
-    renderTargetCameraRef.current.position.z += 4;
+    renderTargetCameraRef.current.position.z += 0;
     renderTargetCameraRef.current.rotation.copy(camera.rotation);
     renderTargetCameraRef.current.up.copy(camera.up);
     renderTargetCameraRef.current.updateProjectionMatrix();
