@@ -1,6 +1,6 @@
-import { useEffect, memo } from 'react'
+import { useEffect, memo, useMemo } from 'react'
 import * as THREE from 'three/webgpu'
-import useShaderVisualNodes from '../../hooks/useShaderVisualNodes'
+import { storage, instanceIndex, vec3 } from 'three/tsl'
 import { dimensions } from '../../constants/dimensions'
 
 export default memo(function SimulationGrid({
@@ -8,7 +8,24 @@ export default memo(function SimulationGrid({
   readStateBuffer,
   spacing = 0.05
 }) {
-  const { fadedColorNode, opacityFadeNode } = useShaderVisualNodes(readStateBuffer, dimensions.COUNT)
+  const { fadedColorNode, opacityFadeNode } = useMemo(() => {
+    if (!readStateBuffer) {
+      return {
+        fadedColorNode: vec3(1, 1, 1),
+        opacityFadeNode: vec3(1)
+      }
+    }
+
+    const stateElement = storage(readStateBuffer, 'float', dimensions.COUNT).element(instanceIndex)
+    const threshold = 0.05
+    const fadeWidth = 0.05
+    const fadeFactor = stateElement.smoothstep(threshold, threshold + fadeWidth)
+
+    const fadedColorNode = vec3(0, 1, 1)
+    const opacityFadeNode =  fadeFactor
+
+    return { fadedColorNode, opacityFadeNode }
+  }, [readStateBuffer])
 
   // Grid positioning initialization
   useEffect(() => {
