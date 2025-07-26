@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three/webgpu';
-import { RENDER_TARGET_CAMERA, cameraHelpers } from '../../constants/camera';
+import { RENDER_TARGET_CAMERA } from '../../constants/camera';
 
 export default function RenderTargetPass({ renderTargetRef, setTexture, isFullscreen }) {
   const { scene, camera, gl } = useThree();
-  const rtCameraRef = useRef();
+  const renderTargetCameraRef = useRef();
 
   useEffect(() => {
     // Clean up previous render target if it exists
@@ -21,17 +21,16 @@ export default function RenderTargetPass({ renderTargetRef, setTexture, isFullsc
     if (setTexture) setTexture(renderTargetRef.current.texture);
     
     // Create a perspective camera for the render target using constants
-    const rtSettings = cameraHelpers.createRenderTargetCamera(camera);
-    rtCameraRef.current = new THREE.PerspectiveCamera(
-      rtSettings.fov,
-      rtSettings.aspect,
-      rtSettings.near,
-      rtSettings.far
+    renderTargetCameraRef.current = new THREE.PerspectiveCamera(
+      RENDER_TARGET_CAMERA.fov,
+      RENDER_TARGET_CAMERA.aspect,
+      RENDER_TARGET_CAMERA.near,
+      RENDER_TARGET_CAMERA.far
     );
-    rtCameraRef.current.position.copy(camera.position);
-    rtCameraRef.current.rotation.copy(camera.rotation);
-    rtCameraRef.current.up.copy(camera.up);
-    rtCameraRef.current.lookAt(0, 0, 0);
+    renderTargetCameraRef.current.position.copy(camera.position);
+    renderTargetCameraRef.current.rotation.copy(camera.rotation);
+    renderTargetCameraRef.current.up.copy(camera.up);
+    renderTargetCameraRef.current.lookAt(0, 0, 0);
     
     // Clean up on unmount
     return () => {
@@ -56,22 +55,22 @@ export default function RenderTargetPass({ renderTargetRef, setTexture, isFullsc
 
   useFrame(() => {
     // Skip render-to-target when in fullscreen mode
-    if (isFullscreen || !renderTargetRef.current || !rtCameraRef.current){ 
+    if (isFullscreen || !renderTargetRef.current || !renderTargetCameraRef.current){ 
         gl.setClearColor(0x000000);
         return;
     }
     
     // Sync the render target camera to the main camera (for controls)
-    rtCameraRef.current.position.copy(camera.position);
-    rtCameraRef.current.position.z += 4;
-    rtCameraRef.current.rotation.copy(camera.rotation);
-    rtCameraRef.current.up.copy(camera.up);
-    rtCameraRef.current.updateProjectionMatrix();
+    renderTargetCameraRef.current.position.copy(camera.position);
+    renderTargetCameraRef.current.position.z += 4;
+    renderTargetCameraRef.current.rotation.copy(camera.rotation);
+    renderTargetCameraRef.current.up.copy(camera.up);
+    renderTargetCameraRef.current.updateProjectionMatrix();
     // Render to the render target with the RT camera
     gl.setRenderTarget(renderTargetRef.current);
     gl.setClearColor(0x000000); // Black for the render target
     gl.clear();
-    gl.render(scene, rtCameraRef.current);
+    gl.render(scene, renderTargetCameraRef.current);
     gl.setRenderTarget(null);
     gl.setClearColor(0xffffff); // Reset to white for the main canvas
   });
