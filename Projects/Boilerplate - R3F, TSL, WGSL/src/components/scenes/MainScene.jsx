@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react'
 import SimulationOrchestrator from '../simulation/SimulationOrchestrator'
 import { OrbitControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { RefractionMesh, RenderTargetPass, FullscreenQuad } from '../rendering'
+import { RefractionMesh, RenderTargetPass, MinimizedMode } from '../rendering'
 
 export default function MainScene() {
   const { camera } = useThree();
@@ -41,7 +41,7 @@ export default function MainScene() {
         />
       )}
       
-      {!isFullscreen && <FullscreenQuad texture={texture} />}
+      {!isFullscreen && <MinimizedMode texture={texture} />}
     </>
   );
 } 

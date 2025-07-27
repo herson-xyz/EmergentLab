@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-export default function FullscreenQuad({ texture }) {
+export default function MinimizedMode({ texture }) {
   const { gl, size } = useThree();
   const aspect = size.width / size.height;
   const sceneRef = useRef();
