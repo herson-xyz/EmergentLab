@@ -45,11 +45,15 @@ export default function SimulationOrchestrator() {
   // Get parameters from the dedicated component
   const params = SimulationParameters(simulationType)
   
-  // Extract visualization parameters from the nested structure
-  const visualizationParams = params?.Visualization?.['Display Settings'] || {
-    threshold: 0.05,
-    fadeWidth: 0.2
+  console.log('SimulationOrchestrator - full params object:', params)
+  
+  // Extract visualization parameters from the flat structure
+  const visualizationParams = {
+    threshold: params?.threshold || 0.05,
+    fadeWidth: params?.fadeWidth || 0.2
   }
+  
+  console.log('SimulationOrchestrator - visualizationParams:', visualizationParams)
   
 
 

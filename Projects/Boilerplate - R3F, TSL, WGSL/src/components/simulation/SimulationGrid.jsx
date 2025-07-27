@@ -11,6 +11,8 @@ export default memo(function SimulationGrid({
   spacing = 0.05
 }) {
   const { fadedColorNode, opacityFadeNode } = useMemo(() => {
+    console.log('SimulationGrid useMemo running with threshold:', threshold, 'fadeWidth:', fadeWidth)
+    
     if (!readStateBuffer) {
       return {
         fadedColorNode: vec3(1, 1, 1),
@@ -94,6 +96,7 @@ export default memo(function SimulationGrid({
     <instancedMesh ref={meshRef} args={[undefined, undefined, dimensions.COUNT]}>
       <planeGeometry args={[0.04, 0.04]} />
       <meshBasicNodeMaterial
+        key={`${threshold}-${fadeWidth}`}
         colorNode={fadedColorNode}
         opacityNode={opacityFadeNode}
         transparent

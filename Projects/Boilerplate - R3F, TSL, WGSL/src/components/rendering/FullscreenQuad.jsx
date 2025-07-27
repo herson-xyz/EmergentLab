@@ -15,7 +15,16 @@ export default function FullscreenQuad({ texture }) {
     cameraRef.current = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     // Always use a square geometry
     const geometry = new THREE.PlaneGeometry(1.75, 1.75);
-    const material = new THREE.MeshBasicMaterial({ map: null, toneMapped: false });
+    // Flip UV coordinates to correct Y coordinate system
+    geometry.attributes.uv.array[1] = 1 - geometry.attributes.uv.array[1];
+    geometry.attributes.uv.array[3] = 1 - geometry.attributes.uv.array[3];
+    geometry.attributes.uv.array[5] = 1 - geometry.attributes.uv.array[5];
+    geometry.attributes.uv.array[7] = 1 - geometry.attributes.uv.array[7];
+    const material = new THREE.MeshBasicMaterial({ 
+      map: null, 
+      toneMapped: false,
+      transparent: true
+    });
     meshRef.current = new THREE.Mesh(geometry, material);
     meshRef.current.position.set(0, 0, 0); // Centered
     sceneRef.current.add(meshRef.current);
@@ -43,6 +52,8 @@ export default function FullscreenQuad({ texture }) {
   useEffect(() => {
     if (meshRef.current && texture) {
       meshRef.current.material.map = texture;
+      // Flip the texture vertically to match coordinate systems
+      texture.flipY = false;
       meshRef.current.material.needsUpdate = true;
     }
   }, [texture]);
