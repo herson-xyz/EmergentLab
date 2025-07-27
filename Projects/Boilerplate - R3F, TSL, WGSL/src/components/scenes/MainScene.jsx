@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react'
 import SimulationOrchestrator from '../simulation/SimulationOrchestrator'
 import { OrbitControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { RefractionMesh, RenderTargetPass, MinimizedMode } from '../rendering'
+import { RefractionMesh, OffscreenRenderTargetManager, OffscreenDisplayAsQuad } from '../rendering'
 
 export default function MainScene() {
   const { camera } = useThree();
@@ -26,11 +26,6 @@ export default function MainScene() {
   
   return (
     <>
-      <RenderTargetPass renderTargetRef={renderTargetRef} setTexture={setTexture} isFullscreen={isFullscreen} />
-      <ambientLight intensity={2} />
-      {/* <RefractionMesh /> */}
-      <SimulationOrchestrator />
-      
       {/* OrbitControls only in fullscreen mode */}
       {isFullscreen && (
         <OrbitControls 
@@ -41,7 +36,11 @@ export default function MainScene() {
         />
       )}
       
-      {!isFullscreen && <MinimizedMode texture={texture} />}
+      {/* <RefractionMesh /> */}
+      <ambientLight intensity={2} />
+      <SimulationOrchestrator />
+      <OffscreenRenderTargetManager renderTargetRef={renderTargetRef} setTexture={setTexture} isFullscreen={isFullscreen} />
+      {!isFullscreen && <OffscreenDisplayAsQuad texture={texture} />}
     </>
   );
 } 

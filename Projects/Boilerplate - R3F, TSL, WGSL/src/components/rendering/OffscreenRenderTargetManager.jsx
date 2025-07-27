@@ -3,7 +3,7 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three/webgpu';
 import { RENDER_TARGET_CAMERA } from '../../constants/camera';
 
-export default function RenderTargetPass({ renderTargetRef, setTexture, isFullscreen }) {
+export default function OffscreenRenderTargetManager({ renderTargetRef, setTexture, isFullscreen }) {
   const { scene, camera, gl } = useThree();
   const renderTargetCameraRef = useRef();
 
@@ -73,4 +73,4 @@ export default function RenderTargetPass({ renderTargetRef, setTexture, isFullsc
 
   // No rendering yet, just setup
   return null;
-}
+} 
