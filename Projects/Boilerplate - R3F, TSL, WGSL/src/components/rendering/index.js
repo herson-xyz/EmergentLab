@@ -1,3 +1,5 @@
 export { default as OffscreenDisplayAsQuad } from './OffscreenDisplayAsQuad.jsx'
 export { default as RefractionMesh } from './RefractionMesh.jsx'
-export { default as OffscreenRenderTargetManager } from './OffscreenRenderTargetManager.jsx' 
+export { default as OffscreenRenderTargetManager } from './OffscreenRenderTargetManager.jsx'
+export { default as CRTShaderMaterial } from './CRTShaderMaterial.jsx'
+export { default as CRTTestQuad } from './CRTTestQuad.jsx' 

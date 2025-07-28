@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react'
 import SimulationOrchestrator from '../simulation/SimulationOrchestrator'
 import { OrbitControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { RefractionMesh, OffscreenRenderTargetManager, OffscreenDisplayAsQuad } from '../rendering'
+import { RefractionMesh, OffscreenRenderTargetManager, OffscreenDisplayAsQuad, CRTTestQuad } from '../rendering'
 
 export default function MainScene() {
   const { camera } = useThree();
@@ -41,6 +41,9 @@ export default function MainScene() {
       <SimulationOrchestrator />
       <OffscreenRenderTargetManager renderTargetRef={renderTargetRef} setTexture={setTexture} isFullscreen={isFullscreen} />
       {!isFullscreen && <OffscreenDisplayAsQuad texture={texture} />}
+      
+      {/* Temporary test - remove after testing */}
+      <CRTTestQuad />
     </>
   );
 } 
