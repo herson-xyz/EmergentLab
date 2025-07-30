@@ -56,6 +56,15 @@ const WebGPUCellularAutomata = () => {
         const context = canvas.getContext("webgpu")
         const canvasFormat = navigator.gpu.getPreferredCanvasFormat()
         
+        // Calculate the largest square that fits in the window
+        const windowWidth = window.innerWidth
+        const windowHeight = window.innerHeight
+        const canvasSize = Math.min(windowWidth, windowHeight)
+        
+        // Set canvas to be a square with the calculated size
+        canvas.width = canvasSize
+        canvas.height = canvasSize
+        
         context.configure({
           device: device,
           format: canvasFormat,
@@ -333,6 +342,30 @@ const WebGPUCellularAutomata = () => {
   useEffect(() => {
     if (!webGPUState.isInitialized || webGPUState.error) return
 
+    // Handle window resize
+    const handleResize = () => {
+      const canvas = canvasRef.current
+      if (canvas && webGPUState.context) {
+        // Recalculate the largest square that fits in the window
+        const windowWidth = window.innerWidth
+        const windowHeight = window.innerHeight
+        const canvasSize = Math.min(windowWidth, windowHeight)
+        
+        // Update canvas dimensions
+        canvas.width = canvasSize
+        canvas.height = canvasSize
+        
+        // Reconfigure the context
+        webGPUState.context.configure({
+          device: webGPUState.device,
+          format: webGPUState.canvasFormat,
+        })
+      }
+    }
+
+    // Add resize listener
+    window.addEventListener('resize', handleResize)
+
     // Update grid function for render loop
     const updateGrid = () => {
       const { 
@@ -389,6 +422,7 @@ const WebGPUCellularAutomata = () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
       }
+      window.removeEventListener('resize', handleResize)
     }
   }, [webGPUState.isInitialized, webGPUState.error])
 
@@ -427,15 +461,13 @@ const WebGPUCellularAutomata = () => {
   return (
     <canvas
       ref={canvasRef}
-      width={512}
-      height={512}
       style={{
         position: 'absolute',
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        border: '1px solid #333',
-        display: 'block'
+        display: 'block',
+        background: '#000'
       }}
     />
   )

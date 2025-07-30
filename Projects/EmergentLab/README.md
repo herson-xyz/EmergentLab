@@ -36,11 +36,11 @@ npm run dev
 
 ## Current Status
 
-**Final Module Complete**: Conway's Game of Life simulation with compute shaders.
+**Final Module Complete**: Conway's Game of Life simulation with compute shaders and adaptive square canvas.
 
 The app currently:
 - ✅ Initializes WebGPU device and adapter
-- ✅ Configures canvas for WebGPU rendering
+- ✅ Configures canvas for WebGPU rendering with adaptive square sizing
 - ✅ Creates vertex buffers with square geometry (two triangles)
 - ✅ Implements vertex and fragment shaders in WGSL using structs
 - ✅ Sets up render pipeline with proper vertex layout
@@ -56,6 +56,7 @@ The app currently:
 - ✅ Applies Conway's Game of Life rules with neighbor counting
 - ✅ Uses workgroups for efficient GPU parallelization
 - ✅ Implements render loop with compute and render passes
+- ✅ Handles window resize events for adaptive canvas sizing
 - ✅ Handles WebGPU support errors gracefully
 
 ## Project Structure
