@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useControls, button } from 'leva'
+import { useSimulationSelector } from '../hooks/useSimulationSelector'
 
 const GRID_SIZE = 512
 const WORKGROUP_SIZE = 8
@@ -16,6 +18,43 @@ export default function WebGPUCellularAutomata() {
   
   const stepRef = useRef(0)
   const intervalRef = useRef(null)
+  const [isRunning, setIsRunning] = useState(true) // Start running by default
+  const [resetFlag, setResetFlag] = useState(false)
+  
+  // Get simulation type from Leva controls
+  const { simulationType } = useSimulationSelector()
+  
+  // Debug: log the simulation type
+  console.log('Current simulation type:', simulationType)
+  
+  // Trigger initial reset on mount
+  useEffect(() => {
+    setResetFlag(true)
+  }, [])
+  
+  // Control functions for play/pause
+  const handlePlay = () => {
+    console.log('Play clicked - starting simulation')
+    setIsRunning(true)
+  }
+  const handlePause = () => {
+    console.log('Pause clicked - pausing simulation')
+    setIsRunning(false)
+  }
+  const handleReset = () => {
+    console.log('Reset clicked - resetting simulation')
+    setResetFlag(true)
+  }
+  
+  // Add controls directly in component
+  useControls({
+    'Play Simulation': button(handlePlay),
+    'Pause Simulation': button(handlePause),
+    'Reset Simulation': button(() => {
+      handleReset()
+      handlePlay() // optional: resume on reset
+    })
+  })
 
   // Initialize WebGPU
   useEffect(() => {
@@ -255,6 +294,8 @@ export default function WebGPUCellularAutomata() {
     if (!webGPUState.isInitialized || webGPUState.error) return
 
     const updateSimulation = () => {
+      // Skip update if simulation is paused
+      if (!isRunning) return
       const currentStep = stepRef.current
       const device = webGPUState.device
       
@@ -314,7 +355,7 @@ export default function WebGPUCellularAutomata() {
         clearInterval(intervalRef.current)
       }
     }
-  }, [webGPUState.isInitialized, webGPUState.error])
+  }, [webGPUState.isInitialized, webGPUState.error, isRunning])
 
   // Set up instance attributes
   useEffect(() => {
@@ -322,6 +363,42 @@ export default function WebGPUCellularAutomata() {
       geometry.setAttribute('instanceState', new THREE.InstancedBufferAttribute(cellStates, 1))
     }
   }, [geometry, cellStates])
+
+  // Reset simulation effect
+  useEffect(() => {
+    if (!resetFlag || !webGPUState.isInitialized) return
+
+    console.log('Resetting simulation state...')
+    
+    // Create new random cell states
+    const newCellStates = new Float32Array(GRID_SIZE * GRID_SIZE)
+    for (let i = 0; i < newCellStates.length; i++) {
+      newCellStates[i] = Math.random() > 0.6 ? 1.0 : 0.0
+    }
+
+    // Update WebGPU buffers
+    if (webGPUState.device && webGPUState.cellStateStorageA && webGPUState.cellStateStorageB) {
+      webGPUState.device.queue.writeBuffer(webGPUState.cellStateStorageA, 0, new Uint32Array(newCellStates))
+      webGPUState.device.queue.writeBuffer(webGPUState.cellStateStorageB, 0, new Uint32Array(newCellStates))
+    }
+
+    // Update Three.js geometry
+    if (meshRef.current) {
+      const instanceStateAttribute = meshRef.current.geometry.getAttribute('instanceState')
+      if (instanceStateAttribute) {
+        instanceStateAttribute.array = newCellStates
+        instanceStateAttribute.needsUpdate = true
+      }
+    }
+
+    // Reset step counter
+    stepRef.current = 0
+
+    // Clear reset flag
+    setResetFlag(false)
+    
+    console.log('Simulation reset complete')
+  }, [resetFlag, webGPUState.isInitialized, webGPUState.device, webGPUState.cellStateStorageA, webGPUState.cellStateStorageB])
 
   // Error handling
   if (webGPUState.error) {
