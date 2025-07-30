@@ -8,7 +8,12 @@ const WebGPUCellularAutomata = () => {
     context: null,
     canvasFormat: null,
     isInitialized: false,
-    error: null
+    error: null,
+    // New state for geometry rendering
+    vertexBuffer: null,
+    vertexBufferLayout: null,
+    cellShaderModule: null,
+    cellPipeline: null
   })
 
   useEffect(() => {
@@ -38,15 +43,86 @@ const WebGPUCellularAutomata = () => {
           format: canvasFormat,
         })
 
+        // Define vertices for a square (two triangles)
+        const vertices = new Float32Array([
+          //   X,    Y,
+          -0.8, -0.8, // Triangle 1 (Blue)
+           0.8, -0.8,
+           0.8,  0.8,
+
+          -0.8, -0.8, // Triangle 2 (Red)
+           0.8,  0.8,
+          -0.8,  0.8,
+        ])
+
+        // Create vertex buffer
+        const vertexBuffer = device.createBuffer({
+          label: "Cell vertices",
+          size: vertices.byteLength,
+          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        })
+
+        // Copy vertex data into buffer
+        device.queue.writeBuffer(vertexBuffer, 0, vertices)
+
+        // Define vertex buffer layout
+        const vertexBufferLayout = {
+          arrayStride: 8,
+          attributes: [{
+            format: "float32x2",
+            offset: 0,
+            shaderLocation: 0, // Position, see vertex shader
+          }],
+        }
+
+        // Create shader module
+        const cellShaderModule = device.createShaderModule({
+          label: "Cell shader",
+          code: `
+            @vertex
+            fn vertexMain(@location(0) pos: vec2f) ->
+              @builtin(position) vec4f {
+              return vec4f(pos, 0, 1);
+            }
+
+            @fragment
+            fn fragmentMain() -> @location(0) vec4f {
+              return vec4f(1, 0, 0, 1); // Red color
+            }
+          `
+        })
+
+        // Create render pipeline
+        const cellPipeline = device.createRenderPipeline({
+          label: "Cell pipeline",
+          layout: "auto",
+          vertex: {
+            module: cellShaderModule,
+            entryPoint: "vertexMain",
+            buffers: [vertexBufferLayout]
+          },
+          fragment: {
+            module: cellShaderModule,
+            entryPoint: "fragmentMain",
+            targets: [{
+              format: canvasFormat
+            }]
+          }
+        })
+
         setWebGPUState({
           device,
           context,
           canvasFormat,
           isInitialized: true,
-          error: null
+          error: null,
+          vertexBuffer,
+          vertexBufferLayout,
+          cellShaderModule,
+          cellPipeline
         })
 
-        console.log("WebGPU initialized successfully!")
+        console.log("WebGPU initialized successfully with geometry rendering!")
       } catch (error) {
         console.error("WebGPU initialization failed:", error)
         setWebGPUState(prev => ({
@@ -63,7 +139,7 @@ const WebGPUCellularAutomata = () => {
     if (!webGPUState.isInitialized || webGPUState.error) return
 
     const render = () => {
-      const { device, context } = webGPUState
+      const { device, context, cellPipeline, vertexBuffer } = webGPUState
 
       // Create command encoder
       const encoder = device.createCommandEncoder()
@@ -73,10 +149,15 @@ const WebGPUCellularAutomata = () => {
         colorAttachments: [{
           view: context.getCurrentTexture().createView(),
           loadOp: "clear",
-          clearValue: { r: 0, g: 0, b: 0.4, a: 1 }, // Dark blue color
+          clearValue: { r: 0, g: 0, b: 0.4, a: 1 }, // Dark blue background
           storeOp: "store",
         }]
       })
+
+      // Draw the square
+      pass.setPipeline(cellPipeline)
+      pass.setVertexBuffer(0, vertexBuffer)
+      pass.draw(6) // 6 vertices (2 triangles)
 
       // End the render pass
       pass.end()
