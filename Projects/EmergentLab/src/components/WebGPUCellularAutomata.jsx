@@ -4,10 +4,12 @@ const WebGPUCellularAutomata = () => {
   const canvasRef = useRef()
   const animationFrameRef = useRef()
   const intervalRef = useRef()
+  const stepRef = useRef(0)
   
   // Grid configuration
   const GRID_SIZE = 32
-  const UPDATE_INTERVAL = 200 // Update every 200ms (5 times/sec)
+  const UPDATE_INTERVAL = 250 // Update every 250ms (4 times/sec)
+  const WORKGROUP_SIZE = 8
   
   const [webGPUState, setWebGPUState] = useState({
     device: null,
@@ -25,7 +27,11 @@ const WebGPUCellularAutomata = () => {
     bindGroups: null,
     // Cell state management
     cellStateStorage: null,
-    step: 0
+    // Compute shader state
+    simulationShaderModule: null,
+    simulationPipeline: null,
+    bindGroupLayout: null,
+    pipelineLayout: null
   })
 
   useEffect(() => {
@@ -113,17 +119,34 @@ const WebGPUCellularAutomata = () => {
           })
         ]
 
-        // Mark every third cell of the first grid as active
-        for (let i = 0; i < cellStateArray.length; i += 3) {
-          cellStateArray[i] = 1
+        // Set each cell to a random state, then copy the JavaScript array into the storage buffer
+        for (let i = 0; i < cellStateArray.length; ++i) {
+          cellStateArray[i] = Math.random() > 0.6 ? 1 : 0
         }
         device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray)
 
-        // Mark every other cell of the second grid as active
-        for (let i = 0; i < cellStateArray.length; i++) {
-          cellStateArray[i] = i % 2
-        }
-        device.queue.writeBuffer(cellStateStorage[1], 0, cellStateArray)
+        // Create the bind group layout and pipeline layout
+        const bindGroupLayout = device.createBindGroupLayout({
+          label: "Cell Bind Group Layout",
+          entries: [{
+            binding: 0,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+            buffer: {} // Grid uniform buffer
+          }, {
+            binding: 1,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
+            buffer: { type: "read-only-storage"} // Cell state input buffer
+          }, {
+            binding: 2,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: "storage"} // Cell state output buffer
+          }]
+        })
+
+        const pipelineLayout = device.createPipelineLayout({
+          label: "Cell Pipeline Layout",
+          bindGroupLayouts: [ bindGroupLayout ],
+        })
 
         // Create shader module with cell state support
         const cellShaderModule = device.createShaderModule({
@@ -166,10 +189,58 @@ const WebGPUCellularAutomata = () => {
           `
         })
 
+        // Create the compute shader that will process the game of life simulation
+        const simulationShaderModule = device.createShaderModule({
+          label: "Life simulation shader",
+          code: `
+            @group(0) @binding(0) var<uniform> grid: vec2f;
+
+            @group(0) @binding(1) var<storage> cellStateIn: array<u32>;
+            @group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>;
+
+            fn cellIndex(cell: vec2u) -> u32 {
+              return (cell.y % u32(grid.y)) * u32(grid.x) +
+                     (cell.x % u32(grid.x));
+            }
+
+            fn cellActive(x: u32, y: u32) -> u32 {
+              return cellStateIn[cellIndex(vec2(x, y))];
+            }
+
+            @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
+            fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
+              // Determine how many active neighbors this cell has.
+              let activeNeighbors = cellActive(cell.x+1, cell.y+1) +
+                                    cellActive(cell.x+1, cell.y) +
+                                    cellActive(cell.x+1, cell.y-1) +
+                                    cellActive(cell.x, cell.y-1) +
+                                    cellActive(cell.x-1, cell.y-1) +
+                                    cellActive(cell.x-1, cell.y) +
+                                    cellActive(cell.x-1, cell.y+1) +
+                                    cellActive(cell.x, cell.y+1);
+
+              let i = cellIndex(cell.xy);
+
+              // Conway's game of life rules:
+              switch activeNeighbors {
+                case 2: { // Active cells with 2 neighbors stay active.
+                  cellStateOut[i] = cellStateIn[i];
+                }
+                case 3: { // Cells with 3 neighbors become or stay active.
+                  cellStateOut[i] = 1;
+                }
+                default: { // Cells with < 2 or > 3 neighbors become inactive.
+                  cellStateOut[i] = 0;
+                }
+              }
+            }
+          `
+        })
+
         // Create render pipeline
         const cellPipeline = device.createRenderPipeline({
           label: "Cell pipeline",
-          layout: "auto",
+          layout: pipelineLayout,
           vertex: {
             module: cellShaderModule,
             entryPoint: "vertexMain",
@@ -184,28 +255,44 @@ const WebGPUCellularAutomata = () => {
           }
         })
 
+        // Create a compute pipeline that updates the game state
+        const simulationPipeline = device.createComputePipeline({
+          label: "Simulation pipeline",
+          layout: pipelineLayout,
+          compute: {
+            module: simulationShaderModule,
+            entryPoint: "computeMain",
+          }
+        })
+
         // Create bind groups for ping-pong pattern
         const bindGroups = [
           device.createBindGroup({
             label: "Cell renderer bind group A",
-            layout: cellPipeline.getBindGroupLayout(0),
+            layout: bindGroupLayout,
             entries: [{
               binding: 0,
               resource: { buffer: uniformBuffer }
             }, {
               binding: 1,
               resource: { buffer: cellStateStorage[0] }
+            }, {
+              binding: 2,
+              resource: { buffer: cellStateStorage[1] }
             }],
           }),
           device.createBindGroup({
             label: "Cell renderer bind group B",
-            layout: cellPipeline.getBindGroupLayout(0),
+            layout: bindGroupLayout,
             entries: [{
               binding: 0,
               resource: { buffer: uniformBuffer }
             }, {
               binding: 1,
               resource: { buffer: cellStateStorage[1] }
+            }, {
+              binding: 2,
+              resource: { buffer: cellStateStorage[0] }
             }],
           })
         ]
@@ -223,10 +310,14 @@ const WebGPUCellularAutomata = () => {
           uniformBuffer,
           bindGroups,
           cellStateStorage,
+          simulationShaderModule,
+          simulationPipeline,
+          bindGroupLayout,
+          pipelineLayout,
           step: 0
         })
 
-        console.log(`WebGPU initialized successfully with cell state management!`)
+        console.log(`WebGPU initialized successfully with Game of Life simulation!`)
       } catch (error) {
         console.error("WebGPU initialization failed:", error)
         setWebGPUState(prev => ({
@@ -244,12 +335,29 @@ const WebGPUCellularAutomata = () => {
 
     // Update grid function for render loop
     const updateGrid = () => {
-      const { device, context, cellPipeline, vertexBuffer, bindGroups, step } = webGPUState
+      const { 
+        device, 
+        context, 
+        cellPipeline, 
+        simulationPipeline,
+        vertexBuffer, 
+        bindGroups
+      } = webGPUState
+
+      const currentStep = stepRef.current
 
       // Create command encoder
       const encoder = device.createCommandEncoder()
 
-      // Begin render pass
+      // Start a compute pass
+      const computePass = encoder.beginComputePass()
+      computePass.setPipeline(simulationPipeline)
+      computePass.setBindGroup(0, bindGroups[currentStep % 2])
+      const workgroupCount = Math.ceil(GRID_SIZE / WORKGROUP_SIZE)
+      computePass.dispatchWorkgroups(workgroupCount, workgroupCount)
+      computePass.end()
+
+      // Start a render pass
       const pass = encoder.beginRenderPass({
         colorAttachments: [{
           view: context.getCurrentTexture().createView(),
@@ -261,21 +369,16 @@ const WebGPUCellularAutomata = () => {
 
       // Draw the grid
       pass.setPipeline(cellPipeline)
-      pass.setBindGroup(0, bindGroups[step % 2]) // Ping-pong between bind groups
+      pass.setBindGroup(0, bindGroups[(currentStep + 1) % 2]) // Use updated state
       pass.setVertexBuffer(0, vertexBuffer)
       pass.draw(6, GRID_SIZE * GRID_SIZE) // 6 vertices, GRID_SIZE * GRID_SIZE instances
 
-      // End the render pass
+      // End the render pass and submit the command buffer
       pass.end()
-
-      // Submit the command buffer
       device.queue.submit([encoder.finish()])
 
-      // Update step count
-      setWebGPUState(prev => ({
-        ...prev,
-        step: prev.step + 1
-      }))
+      // Increment the step count after submission
+      stepRef.current = currentStep + 1
     }
 
     // Start the render loop with setInterval

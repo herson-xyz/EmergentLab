@@ -7,9 +7,10 @@ A React application for continuous cellular automata simulations using WebGPU. T
 - WebGPU-powered cellular automata simulations
 - React integration with direct WebGPU rendering
 - Modular architecture for easy expansion
-- Game of Life as the first simulation type
+- Conway's Game of Life simulation with compute shaders
 - Colorful gradient visualization
 - Cell state management with ping-pong buffers
+- Real-time simulation updates
 
 ## Prerequisites
 
@@ -35,7 +36,7 @@ npm run dev
 
 ## Current Status
 
-**Module 4 Complete**: Cell state management with storage buffers and ping-pong pattern.
+**Final Module Complete**: Conway's Game of Life simulation with compute shaders.
 
 The app currently:
 - ✅ Initializes WebGPU device and adapter
@@ -51,7 +52,10 @@ The app currently:
 - ✅ Creates storage buffers for cell state management
 - ✅ Implements ping-pong pattern with two state buffers
 - ✅ Uses cell state to control square visibility (scaling)
-- ✅ Implements render loop with setInterval (200ms updates)
+- ✅ Implements compute shaders for Game of Life simulation
+- ✅ Applies Conway's Game of Life rules with neighbor counting
+- ✅ Uses workgroups for efficient GPU parallelization
+- ✅ Implements render loop with compute and render passes
 - ✅ Handles WebGPU support errors gracefully
 
 ## Project Structure
@@ -67,28 +71,40 @@ src/
 
 ## Technical Details
 
-### Module 4 Implementation:
-- **Storage Buffers**: Two Uint32Array buffers for cell state (ping-pong pattern)
-- **Cell State**: 1 = active (visible), 0 = inactive (collapsed to point)
-- **Ping-Pong Pattern**: Alternates between two state buffers each frame
-- **Vertex Scaling**: Squares scaled by cell state (`pos * state`)
-- **Render Loop**: Updates every 200ms using setInterval
-- **Bind Groups**: Two bind groups for alternating state buffers
+### Final Implementation:
+- **Compute Shaders**: WGSL compute shader with 8x8 workgroups
+- **Game of Life Rules**: Conway's classic cellular automaton rules
+- **Neighbor Counting**: 8-neighbor Moore neighborhood with wrap-around
+- **Random Initialization**: 40% cell density for interesting patterns
+- **Dual Pipeline**: Compute pipeline for simulation, render pipeline for visualization
+- **Shared Resources**: Bind group layout shared between compute and render pipelines
 
-### Cell State Patterns:
-- **Buffer A**: Every third cell active (diagonal stripes)
-- **Buffer B**: Every other cell active (checkerboard pattern)
-
-### Vertex Shader Cell State Integration:
+### Conway's Game of Life Rules:
 ```wgsl
-let state = f32(cellState[input.instance]);
-let gridPos = (input.pos * state + 1) / grid - 1 + cellOffset;
+switch activeNeighbors {
+  case 2: { // Active cells with 2 neighbors stay active
+    cellStateOut[i] = cellStateIn[i];
+  }
+  case 3: { // Cells with 3 neighbors become or stay active
+    cellStateOut[i] = 1;
+  }
+  default: { // Cells with < 2 or > 3 neighbors become inactive
+    cellStateOut[i] = 0;
+  }
+}
 ```
 
-### Ping-Pong Pattern:
-```javascript
-pass.setBindGroup(0, bindGroups[step % 2]); // Alternates between 0 and 1
-```
+### Compute Shader Features:
+- **Workgroup Size**: 8x8 (64 invocations per workgroup)
+- **Grid Wrap-around**: Toroidal surface using modulo operations
+- **Neighbor Function**: `cellActive(x, y)` for clean neighbor access
+- **Index Calculation**: `cellIndex(cell)` for 2D to 1D mapping
+
+### Pipeline Architecture:
+- **Bind Group Layout**: Explicit layout with 3 bindings (uniform, input, output)
+- **Pipeline Layout**: Shared between compute and render pipelines
+- **Resource Sharing**: Uniform and storage buffers accessible to both pipelines
+- **Ping-Pong Pattern**: Alternating input/output buffers for simulation steps
 
 ### Color Algorithm:
 ```wgsl
@@ -116,25 +132,36 @@ let gridPos = (pos + 1) / grid - 1 + cellOffset;
 
 ## Visual Result
 
-You should see a **32x32 grid that alternates between two patterns** every 200ms:
-- **Pattern A**: Diagonal stripes of colorful squares
-- **Pattern B**: Checkerboard pattern of colorful squares
-- **Inactive cells**: Collapsed to invisible points
-- **Active cells**: Full colorful squares with gradients
+You should see a **32x32 grid running Conway's Game of Life simulation** with:
+- **Random Initial Pattern**: 40% of cells start active
+- **Live Evolution**: Cells follow Conway's rules every 250ms
+- **Colorful Visualization**: Active cells show gradient colors based on position
+- **Wrap-around Edges**: Grid behaves like a toroidal surface
+- **Smooth Animation**: Compute shader updates, render shader visualizes
 
 This demonstrates:
-- Successful storage buffer integration with shaders
-- Proper ping-pong pattern implementation
-- Cell state controlling geometry visibility
-- Smooth animation loop with controlled timing
+- Complete WebGPU compute and render pipeline integration
+- Real-time cellular automaton simulation
+- Efficient GPU parallelization with workgroups
+- Proper resource management and state synchronization
+
+## Game of Life Patterns
+
+The simulation will exhibit classic Game of Life behaviors:
+- **Still Lifes**: Stable patterns that don't change
+- **Oscillators**: Patterns that repeat in cycles
+- **Spaceships**: Patterns that move across the grid
+- **Gliders**: Small spaceships that move diagonally
+- **Chaos**: Complex evolving patterns
 
 ## Next Steps
 
-The project is ready for the next module. Each module will build upon the previous one, adding new functionality like:
-- Compute shaders for Game of Life simulation logic
-- Conway's Game of Life rules implementation
-- Dynamic cell state updates based on neighbor calculations
-- Interactive controls and visualization
+The project is now complete with a fully functional Game of Life simulation! Future enhancements could include:
+- Interactive controls (pause, reset, speed adjustment)
+- Different initial patterns (glider gun, random, etc.)
+- Multiple cellular automaton rules
+- 3D visualization or larger grids
+- Performance optimizations
 
 ## Browser Support
 
