@@ -3,9 +3,11 @@ import React, { useRef, useEffect, useState } from 'react'
 const WebGPUCellularAutomata = () => {
   const canvasRef = useRef()
   const animationFrameRef = useRef()
+  const intervalRef = useRef()
   
   // Grid configuration
   const GRID_SIZE = 32
+  const UPDATE_INTERVAL = 200 // Update every 200ms (5 times/sec)
   
   const [webGPUState, setWebGPUState] = useState({
     device: null,
@@ -20,7 +22,10 @@ const WebGPUCellularAutomata = () => {
     cellPipeline: null,
     // Grid rendering state
     uniformBuffer: null,
-    bindGroup: null
+    bindGroups: null,
+    // Cell state management
+    cellStateStorage: null,
+    step: 0
   })
 
   useEffect(() => {
@@ -91,7 +96,36 @@ const WebGPUCellularAutomata = () => {
         })
         device.queue.writeBuffer(uniformBuffer, 0, uniformArray)
 
-        // Create shader module with colorful grid support
+        // Create an array representing the active state of each cell
+        const cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE)
+
+        // Create two storage buffers to hold the cell state (ping-pong pattern)
+        const cellStateStorage = [
+          device.createBuffer({
+            label: "Cell State A",
+            size: cellStateArray.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+          }),
+          device.createBuffer({
+            label: "Cell State B",
+            size: cellStateArray.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+          })
+        ]
+
+        // Mark every third cell of the first grid as active
+        for (let i = 0; i < cellStateArray.length; i += 3) {
+          cellStateArray[i] = 1
+        }
+        device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray)
+
+        // Mark every other cell of the second grid as active
+        for (let i = 0; i < cellStateArray.length; i++) {
+          cellStateArray[i] = i % 2
+        }
+        device.queue.writeBuffer(cellStateStorage[1], 0, cellStateArray)
+
+        // Create shader module with cell state support
         const cellShaderModule = device.createShaderModule({
           label: "Cell shader",
           code: `
@@ -106,13 +140,17 @@ const WebGPUCellularAutomata = () => {
             };
 
             @group(0) @binding(0) var<uniform> grid: vec2f;
+            @group(0) @binding(1) var<storage> cellState: array<u32>;
 
             @vertex
             fn vertexMain(input: VertexInput) -> VertexOutput {
               let i = f32(input.instance);
               let cell = vec2f(i % grid.x, floor(i / grid.x));
+              let state = f32(cellState[input.instance]);
+
               let cellOffset = cell / grid * 2;
-              let gridPos = (input.pos + 1) / grid - 1 + cellOffset;
+              // Scale the position by the cell's active state
+              let gridPos = (input.pos * state + 1) / grid - 1 + cellOffset;
               
               var output: VertexOutput;
               output.pos = vec4f(gridPos, 0, 1);
@@ -146,15 +184,31 @@ const WebGPUCellularAutomata = () => {
           }
         })
 
-        // Create bind group
-        const bindGroup = device.createBindGroup({
-          label: "Cell renderer bind group",
-          layout: cellPipeline.getBindGroupLayout(0),
-          entries: [{
-            binding: 0,
-            resource: { buffer: uniformBuffer }
-          }],
-        })
+        // Create bind groups for ping-pong pattern
+        const bindGroups = [
+          device.createBindGroup({
+            label: "Cell renderer bind group A",
+            layout: cellPipeline.getBindGroupLayout(0),
+            entries: [{
+              binding: 0,
+              resource: { buffer: uniformBuffer }
+            }, {
+              binding: 1,
+              resource: { buffer: cellStateStorage[0] }
+            }],
+          }),
+          device.createBindGroup({
+            label: "Cell renderer bind group B",
+            layout: cellPipeline.getBindGroupLayout(0),
+            entries: [{
+              binding: 0,
+              resource: { buffer: uniformBuffer }
+            }, {
+              binding: 1,
+              resource: { buffer: cellStateStorage[1] }
+            }],
+          })
+        ]
 
         setWebGPUState({
           device,
@@ -167,10 +221,12 @@ const WebGPUCellularAutomata = () => {
           cellShaderModule,
           cellPipeline,
           uniformBuffer,
-          bindGroup
+          bindGroups,
+          cellStateStorage,
+          step: 0
         })
 
-        console.log(`WebGPU initialized successfully with colorful ${GRID_SIZE}x${GRID_SIZE} grid rendering!`)
+        console.log(`WebGPU initialized successfully with cell state management!`)
       } catch (error) {
         console.error("WebGPU initialization failed:", error)
         setWebGPUState(prev => ({
@@ -186,8 +242,9 @@ const WebGPUCellularAutomata = () => {
   useEffect(() => {
     if (!webGPUState.isInitialized || webGPUState.error) return
 
-    const render = () => {
-      const { device, context, cellPipeline, vertexBuffer, bindGroup } = webGPUState
+    // Update grid function for render loop
+    const updateGrid = () => {
+      const { device, context, cellPipeline, vertexBuffer, bindGroups, step } = webGPUState
 
       // Create command encoder
       const encoder = device.createCommandEncoder()
@@ -204,8 +261,8 @@ const WebGPUCellularAutomata = () => {
 
       // Draw the grid
       pass.setPipeline(cellPipeline)
+      pass.setBindGroup(0, bindGroups[step % 2]) // Ping-pong between bind groups
       pass.setVertexBuffer(0, vertexBuffer)
-      pass.setBindGroup(0, bindGroup)
       pass.draw(6, GRID_SIZE * GRID_SIZE) // 6 vertices, GRID_SIZE * GRID_SIZE instances
 
       // End the render pass
@@ -214,17 +271,20 @@ const WebGPUCellularAutomata = () => {
       // Submit the command buffer
       device.queue.submit([encoder.finish()])
 
-      // Schedule next frame
-      animationFrameRef.current = requestAnimationFrame(render)
+      // Update step count
+      setWebGPUState(prev => ({
+        ...prev,
+        step: prev.step + 1
+      }))
     }
 
-    // Start the render loop
-    render()
+    // Start the render loop with setInterval
+    intervalRef.current = setInterval(updateGrid, UPDATE_INTERVAL)
 
     // Cleanup function
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
       }
     }
   }, [webGPUState.isInitialized, webGPUState.error])

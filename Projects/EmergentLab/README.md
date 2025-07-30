@@ -9,6 +9,7 @@ A React application for continuous cellular automata simulations using WebGPU. T
 - Modular architecture for easy expansion
 - Game of Life as the first simulation type
 - Colorful gradient visualization
+- Cell state management with ping-pong buffers
 
 ## Prerequisites
 
@@ -34,7 +35,7 @@ npm run dev
 
 ## Current Status
 
-**Extra Credit Module Complete**: Colorful grid rendering with WGSL structs and data passing.
+**Module 4 Complete**: Cell state management with storage buffers and ping-pong pattern.
 
 The app currently:
 - ✅ Initializes WebGPU device and adapter
@@ -47,7 +48,10 @@ The app currently:
 - ✅ Uses instancing to render 1024 squares in a grid pattern
 - ✅ Passes cell coordinates from vertex to fragment shader
 - ✅ Renders colorful gradients based on cell position
-- ✅ Uses requestAnimationFrame for smooth rendering
+- ✅ Creates storage buffers for cell state management
+- ✅ Implements ping-pong pattern with two state buffers
+- ✅ Uses cell state to control square visibility (scaling)
+- ✅ Implements render loop with setInterval (200ms updates)
 - ✅ Handles WebGPU support errors gracefully
 
 ## Project Structure
@@ -63,12 +67,28 @@ src/
 
 ## Technical Details
 
-### Extra Credit Implementation:
-- **WGSL Structs**: Uses VertexInput and VertexOutput structs for better organization
-- **Data Passing**: Cell coordinates passed from vertex to fragment shader via @location(0)
-- **Color Gradients**: Fragment shader creates smooth color transitions based on cell position
-- **Color Formula**: `vec4f(c, 1-c.x, 1)` where `c = cell / grid`
-- **Visual Result**: Grid transitions from red to green to blue to yellow across corners
+### Module 4 Implementation:
+- **Storage Buffers**: Two Uint32Array buffers for cell state (ping-pong pattern)
+- **Cell State**: 1 = active (visible), 0 = inactive (collapsed to point)
+- **Ping-Pong Pattern**: Alternates between two state buffers each frame
+- **Vertex Scaling**: Squares scaled by cell state (`pos * state`)
+- **Render Loop**: Updates every 200ms using setInterval
+- **Bind Groups**: Two bind groups for alternating state buffers
+
+### Cell State Patterns:
+- **Buffer A**: Every third cell active (diagonal stripes)
+- **Buffer B**: Every other cell active (checkerboard pattern)
+
+### Vertex Shader Cell State Integration:
+```wgsl
+let state = f32(cellState[input.instance]);
+let gridPos = (input.pos * state + 1) / grid - 1 + cellOffset;
+```
+
+### Ping-Pong Pattern:
+```javascript
+pass.setBindGroup(0, bindGroups[step % 2]); // Alternates between 0 and 1
+```
 
 ### Color Algorithm:
 ```wgsl
@@ -96,18 +116,24 @@ let gridPos = (pos + 1) / grid - 1 + cellOffset;
 
 ## Visual Result
 
-You should see a **32x32 grid with colorful gradients** on a **dark blue background**, demonstrating:
-- Smooth color transitions from red to green to blue to yellow
-- Successful data passing between vertex and fragment shaders
-- Proper use of WGSL structs for better code organization
-- Bright, visually appealing grid that avoids dark corners
+You should see a **32x32 grid that alternates between two patterns** every 200ms:
+- **Pattern A**: Diagonal stripes of colorful squares
+- **Pattern B**: Checkerboard pattern of colorful squares
+- **Inactive cells**: Collapsed to invisible points
+- **Active cells**: Full colorful squares with gradients
+
+This demonstrates:
+- Successful storage buffer integration with shaders
+- Proper ping-pong pattern implementation
+- Cell state controlling geometry visibility
+- Smooth animation loop with controlled timing
 
 ## Next Steps
 
 The project is ready for the next module. Each module will build upon the previous one, adding new functionality like:
-- Compute shaders for simulation logic
-- Game of Life rules implementation
-- Cell state management and animation
+- Compute shaders for Game of Life simulation logic
+- Conway's Game of Life rules implementation
+- Dynamic cell state updates based on neighbor calculations
 - Interactive controls and visualization
 
 ## Browser Support
