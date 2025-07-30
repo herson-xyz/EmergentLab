@@ -1,244 +1,109 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useMemo } from 'react'
+import { useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
 
-const WebGPUCellularAutomata = () => {
-  const canvasRef = useRef()
-  const animationFrameRef = useRef()
-  const intervalRef = useRef()
-  const stepRef = useRef(0)
-  
-  // Grid configuration
-  const GRID_SIZE = 32
-  const UPDATE_INTERVAL = 250 // Update every 250ms (4 times/sec)
-  const WORKGROUP_SIZE = 8
-  
+const GRID_SIZE = 512
+const WORKGROUP_SIZE = 8
+const UPDATE_INTERVAL = 100
+
+export default function WebGPUCellularAutomata() {
+  const meshRef = useRef()
   const [webGPUState, setWebGPUState] = useState({
     device: null,
-    context: null,
-    canvasFormat: null,
     isInitialized: false,
-    error: null,
-    // Geometry rendering state
-    vertexBuffer: null,
-    vertexBufferLayout: null,
-    cellShaderModule: null,
-    cellPipeline: null,
-    // Grid rendering state
-    uniformBuffer: null,
-    bindGroups: null,
-    // Cell state management
-    cellStateStorage: null,
-    // Compute shader state
-    simulationShaderModule: null,
-    simulationPipeline: null,
-    bindGroupLayout: null,
-    pipelineLayout: null
+    error: null
   })
+  
+  const stepRef = useRef(0)
+  const intervalRef = useRef(null)
 
+  // Initialize WebGPU
   useEffect(() => {
-    const initializeWebGPU = async () => {
+    async function initializeWebGPU() {
       try {
-        // Check if WebGPU is supported
+        // Check WebGPU support
         if (!navigator.gpu) {
           throw new Error("WebGPU not supported on this browser.")
         }
 
-        // Request adapter
+        // Request adapter and device
         const adapter = await navigator.gpu.requestAdapter()
         if (!adapter) {
           throw new Error("No appropriate GPUAdapter found.")
         }
 
-        // Request device
         const device = await adapter.requestDevice()
-
-        // Get canvas context and configure it
-        const canvas = canvasRef.current
-        const context = canvas.getContext("webgpu")
-        const canvasFormat = navigator.gpu.getPreferredCanvasFormat()
         
-        // Calculate the largest square that fits in the window
-        const windowWidth = window.innerWidth
-        const windowHeight = window.innerHeight
-        const canvasSize = Math.min(windowWidth, windowHeight)
-        
-        // Set canvas to be a square with the calculated size
-        canvas.width = canvasSize
-        canvas.height = canvasSize
-        
-        context.configure({
-          device: device,
-          format: canvasFormat,
-        })
-
-        // Define vertices for a square (two triangles)
-        const vertices = new Float32Array([
-          //   X,    Y,
-          -0.8, -0.8, // Triangle 1
-           0.8, -0.8,
-           0.8,  0.8,
-
-          -0.8, -0.8, // Triangle 2
-           0.8,  0.8,
-          -0.8,  0.8,
-        ])
-
-        // Create vertex buffer
-        const vertexBuffer = device.createBuffer({
-          label: "Cell vertices",
-          size: vertices.byteLength,
-          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        })
-
-        // Copy vertex data into buffer
-        device.queue.writeBuffer(vertexBuffer, 0, vertices)
-
-        // Define vertex buffer layout
-        const vertexBufferLayout = {
-          arrayStride: 8,
-          attributes: [{
-            format: "float32x2",
-            offset: 0,
-            shaderLocation: 0, // Position, see vertex shader
-          }],
+        // Create cell state arrays
+        const cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE)
+        for (let i = 0; i < cellStateArray.length; i++) {
+          cellStateArray[i] = Math.random() > 0.6 ? 1 : 0
         }
 
-        // Create a uniform buffer that describes the grid
+        // Create storage buffers for ping-pong pattern
+        const cellStateStorageA = device.createBuffer({
+          size: cellStateArray.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        })
+        const cellStateStorageB = device.createBuffer({
+          size: cellStateArray.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        })
+
+        // Initialize buffers
+        device.queue.writeBuffer(cellStateStorageA, 0, cellStateArray)
+        device.queue.writeBuffer(cellStateStorageB, 0, cellStateArray)
+
+        // Create uniform buffer for grid size
         const uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE])
         const uniformBuffer = device.createBuffer({
-          label: "Grid Uniforms",
           size: uniformArray.byteLength,
           usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         })
         device.queue.writeBuffer(uniformBuffer, 0, uniformArray)
 
-        // Create an array representing the active state of each cell
-        const cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE)
-
-        // Create two storage buffers to hold the cell state (ping-pong pattern)
-        const cellStateStorage = [
-          device.createBuffer({
-            label: "Cell State A",
-            size: cellStateArray.byteLength,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-          }),
-          device.createBuffer({
-            label: "Cell State B",
-            size: cellStateArray.byteLength,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-          })
-        ]
-
-        // Set each cell to a random state, then copy the JavaScript array into the storage buffer
-        for (let i = 0; i < cellStateArray.length; ++i) {
-          cellStateArray[i] = Math.random() > 0.6 ? 1 : 0
-        }
-        device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray)
-
-        // Create the bind group layout and pipeline layout
-        const bindGroupLayout = device.createBindGroupLayout({
-          label: "Cell Bind Group Layout",
-          entries: [{
-            binding: 0,
-            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-            buffer: {} // Grid uniform buffer
-          }, {
-            binding: 1,
-            visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
-            buffer: { type: "read-only-storage"} // Cell state input buffer
-          }, {
-            binding: 2,
-            visibility: GPUShaderStage.COMPUTE,
-            buffer: { type: "storage"} // Cell state output buffer
-          }]
-        })
-
-        const pipelineLayout = device.createPipelineLayout({
-          label: "Cell Pipeline Layout",
-          bindGroupLayouts: [ bindGroupLayout ],
-        })
-
-        // Create shader module with cell state support
-        const cellShaderModule = device.createShaderModule({
-          label: "Cell shader",
-          code: `
-            struct VertexInput {
-              @location(0) pos: vec2f,
-              @builtin(instance_index) instance: u32,
-            };
-
-            struct VertexOutput {
-              @builtin(position) pos: vec4f,
-              @location(0) cell: vec2f,
-            };
-
-            @group(0) @binding(0) var<uniform> grid: vec2f;
-            @group(0) @binding(1) var<storage> cellState: array<u32>;
-
-            @vertex
-            fn vertexMain(input: VertexInput) -> VertexOutput {
-              let i = f32(input.instance);
-              let cell = vec2f(i % grid.x, floor(i / grid.x));
-              let state = f32(cellState[input.instance]);
-
-              let cellOffset = cell / grid * 2;
-              // Scale the position by the cell's active state
-              let gridPos = (input.pos * state + 1) / grid - 1 + cellOffset;
-              
-              var output: VertexOutput;
-              output.pos = vec4f(gridPos, 0, 1);
-              output.cell = cell;
-              return output;
-            }
-
-            @fragment
-            fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-              let c = input.cell / grid;
-              return vec4f(c, 1-c.x, 1);
-            }
-          `
-        })
-
-        // Create the compute shader that will process the game of life simulation
+        // Create compute shader
         const simulationShaderModule = device.createShaderModule({
-          label: "Life simulation shader",
           code: `
             @group(0) @binding(0) var<uniform> grid: vec2f;
-
             @group(0) @binding(1) var<storage> cellStateIn: array<u32>;
             @group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>;
 
             fn cellIndex(cell: vec2u) -> u32 {
-              return (cell.y % u32(grid.y)) * u32(grid.x) +
-                     (cell.x % u32(grid.x));
+              return cell.y * u32(grid.x) + cell.x;
             }
 
             fn cellActive(x: u32, y: u32) -> u32 {
-              return cellStateIn[cellIndex(vec2(x, y))];
+              let boundsX = u32(grid.x);
+              let boundsY = u32(grid.y);
+              let index = cellIndex(vec2u(x % boundsX, y % boundsY));
+              return cellStateIn[index];
             }
 
             @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
             fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
-              // Determine how many active neighbors this cell has.
-              let activeNeighbors = cellActive(cell.x+1, cell.y+1) +
-                                    cellActive(cell.x+1, cell.y) +
-                                    cellActive(cell.x+1, cell.y-1) +
-                                    cellActive(cell.x, cell.y-1) +
-                                    cellActive(cell.x-1, cell.y-1) +
-                                    cellActive(cell.x-1, cell.y) +
-                                    cellActive(cell.x-1, cell.y+1) +
-                                    cellActive(cell.x, cell.y+1);
-
               let i = cellIndex(cell.xy);
+              if (cell.x >= u32(grid.x) || cell.y >= u32(grid.y)) {
+                return;
+              }
 
-              // Conway's game of life rules:
+              let activeNeighbors = cellActive(cell.x + 1, cell.y) +
+                                   cellActive(cell.x + 1, cell.y + 1) +
+                                   cellActive(cell.x, cell.y + 1) +
+                                   cellActive(cell.x - 1, cell.y + 1) +
+                                   cellActive(cell.x - 1, cell.y) +
+                                   cellActive(cell.x - 1, cell.y - 1) +
+                                   cellActive(cell.x, cell.y - 1) +
+                                   cellActive(cell.x + 1, cell.y - 1);
+
               switch activeNeighbors {
-                case 2: { // Active cells with 2 neighbors stay active.
+                case 2: {
                   cellStateOut[i] = cellStateIn[i];
                 }
-                case 3: { // Cells with 3 neighbors become or stay active.
+                case 3: {
                   cellStateOut[i] = 1;
                 }
-                default: { // Cells with < 2 or > 3 neighbors become inactive.
+                default: {
                   cellStateOut[i] = 0;
                 }
               }
@@ -246,231 +111,241 @@ const WebGPUCellularAutomata = () => {
           `
         })
 
-        // Create render pipeline
-        const cellPipeline = device.createRenderPipeline({
-          label: "Cell pipeline",
-          layout: pipelineLayout,
-          vertex: {
-            module: cellShaderModule,
-            entryPoint: "vertexMain",
-            buffers: [vertexBufferLayout]
-          },
-          fragment: {
-            module: cellShaderModule,
-            entryPoint: "fragmentMain",
-            targets: [{
-              format: canvasFormat
-            }]
-          }
+        // Create bind group layout
+        const bindGroupLayout = device.createBindGroupLayout({
+          entries: [
+            {
+              binding: 0,
+              visibility: GPUShaderStage.COMPUTE,
+              buffer: { type: "uniform" }
+            },
+            {
+              binding: 1,
+              visibility: GPUShaderStage.COMPUTE,
+              buffer: { type: "read-only-storage" }
+            },
+            {
+              binding: 2,
+              visibility: GPUShaderStage.COMPUTE,
+              buffer: { type: "storage" }
+            }
+          ]
         })
 
-        // Create a compute pipeline that updates the game state
+        // Create pipeline layout
+        const pipelineLayout = device.createPipelineLayout({
+          bindGroupLayouts: [bindGroupLayout]
+        })
+
+        // Create compute pipeline
         const simulationPipeline = device.createComputePipeline({
-          label: "Simulation pipeline",
           layout: pipelineLayout,
           compute: {
             module: simulationShaderModule,
-            entryPoint: "computeMain",
+            entryPoint: "computeMain"
           }
         })
 
-        // Create bind groups for ping-pong pattern
-        const bindGroups = [
-          device.createBindGroup({
-            label: "Cell renderer bind group A",
-            layout: bindGroupLayout,
-            entries: [{
-              binding: 0,
-              resource: { buffer: uniformBuffer }
-            }, {
-              binding: 1,
-              resource: { buffer: cellStateStorage[0] }
-            }, {
-              binding: 2,
-              resource: { buffer: cellStateStorage[1] }
-            }],
-          }),
-          device.createBindGroup({
-            label: "Cell renderer bind group B",
-            layout: bindGroupLayout,
-            entries: [{
-              binding: 0,
-              resource: { buffer: uniformBuffer }
-            }, {
-              binding: 1,
-              resource: { buffer: cellStateStorage[1] }
-            }, {
-              binding: 2,
-              resource: { buffer: cellStateStorage[0] }
-            }],
-          })
-        ]
+        // Create bind groups
+        const bindGroupA = device.createBindGroup({
+          layout: bindGroupLayout,
+          entries: [
+            { binding: 0, resource: { buffer: uniformBuffer } },
+            { binding: 1, resource: { buffer: cellStateStorageA } },
+            { binding: 2, resource: { buffer: cellStateStorageB } }
+          ]
+        })
+
+        const bindGroupB = device.createBindGroup({
+          layout: bindGroupLayout,
+          entries: [
+            { binding: 0, resource: { buffer: uniformBuffer } },
+            { binding: 1, resource: { buffer: cellStateStorageB } },
+            { binding: 2, resource: { buffer: cellStateStorageA } }
+          ]
+        })
 
         setWebGPUState({
           device,
-          context,
-          canvasFormat,
           isInitialized: true,
           error: null,
-          vertexBuffer,
-          vertexBufferLayout,
-          cellShaderModule,
-          cellPipeline,
-          uniformBuffer,
-          bindGroups,
-          cellStateStorage,
-          simulationShaderModule,
+          cellStateStorageA,
+          cellStateStorageB,
+          bindGroupA,
+          bindGroupB,
           simulationPipeline,
-          bindGroupLayout,
-          pipelineLayout,
-          step: 0
+          cellStateArray
         })
 
-        console.log(`WebGPU initialized successfully with Game of Life simulation!`)
       } catch (error) {
-        console.error("WebGPU initialization failed:", error)
-        setWebGPUState(prev => ({
-          ...prev,
+        console.error('WebGPU initialization failed:', error)
+        setWebGPUState({
+          device: null,
+          isInitialized: false,
           error: error.message
-        }))
+        })
       }
     }
 
     initializeWebGPU()
   }, [])
 
+  // Create Three.js geometry and material
+  const { geometry, material, cellStates } = useMemo(() => {
+    // Create instanced geometry for cells
+    const geometry = new THREE.PlaneGeometry(1, 1)
+    
+    // Create instanced material with custom shaders
+    const material = new THREE.ShaderMaterial({
+             vertexShader: `
+         attribute float instanceState;
+         varying vec2 vCell;
+         varying float vState;
+         
+         void main() {
+           vState = instanceState;
+           
+           // Calculate cell position
+           float instanceIndex = float(gl_InstanceID);
+           float gridSize = ${GRID_SIZE}.0;
+           vec2 cell = vec2(mod(instanceIndex, gridSize), floor(instanceIndex / gridSize));
+           vCell = cell;
+           
+           // Calculate cell size and position
+           float cellSize = 2.0 / gridSize; // Each cell takes up 2/gridSize of the total space
+           vec2 cellOffset = (cell / gridSize - 0.5) * 2.0;
+           
+           // Scale the vertex position by cell size and state
+           vec3 pos = position;
+           pos.xy = pos.xy * cellSize * instanceState + cellOffset;
+           
+           gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+         }
+       `,
+      fragmentShader: `
+        varying vec2 vCell;
+        varying float vState;
+        
+        void main() {
+          if (vState < 0.5) {
+            discard; // Don't render inactive cells
+          }
+          
+          // Color based on cell position
+          vec2 grid = vec2(${GRID_SIZE}.0, ${GRID_SIZE}.0);
+          vec2 c = vCell / grid;
+          gl_FragColor = vec4(c, 1.0 - c.x, 1.0);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide
+    })
+
+    // Create initial cell states
+    const cellStates = new Float32Array(GRID_SIZE * GRID_SIZE)
+    for (let i = 0; i < cellStates.length; i++) {
+      cellStates[i] = Math.random() > 0.6 ? 1.0 : 0.0
+    }
+
+    return { geometry, material, cellStates }
+  }, [])
+
+  // Update simulation
   useEffect(() => {
     if (!webGPUState.isInitialized || webGPUState.error) return
 
-    // Handle window resize
-    const handleResize = () => {
-      const canvas = canvasRef.current
-      if (canvas && webGPUState.context) {
-        // Recalculate the largest square that fits in the window
-        const windowWidth = window.innerWidth
-        const windowHeight = window.innerHeight
-        const canvasSize = Math.min(windowWidth, windowHeight)
-        
-        // Update canvas dimensions
-        canvas.width = canvasSize
-        canvas.height = canvasSize
-        
-        // Reconfigure the context
-        webGPUState.context.configure({
-          device: webGPUState.device,
-          format: webGPUState.canvasFormat,
-        })
-      }
-    }
-
-    // Add resize listener
-    window.addEventListener('resize', handleResize)
-
-    // Update grid function for render loop
-    const updateGrid = () => {
-      const { 
-        device, 
-        context, 
-        cellPipeline, 
-        simulationPipeline,
-        vertexBuffer, 
-        bindGroups
-      } = webGPUState
-
+    const updateSimulation = () => {
       const currentStep = stepRef.current
-
-      // Create command encoder
-      const encoder = device.createCommandEncoder()
-
-      // Start a compute pass
-      const computePass = encoder.beginComputePass()
-      computePass.setPipeline(simulationPipeline)
-      computePass.setBindGroup(0, bindGroups[currentStep % 2])
-      const workgroupCount = Math.ceil(GRID_SIZE / WORKGROUP_SIZE)
-      computePass.dispatchWorkgroups(workgroupCount, workgroupCount)
+      const device = webGPUState.device
+      
+      // Run compute shader
+      const commandEncoder = device.createCommandEncoder()
+      const computePass = commandEncoder.beginComputePass()
+      computePass.setPipeline(webGPUState.simulationPipeline)
+      computePass.setBindGroup(0, currentStep % 2 === 0 ? webGPUState.bindGroupA : webGPUState.bindGroupB)
+      computePass.dispatchWorkgroups(Math.ceil(GRID_SIZE / WORKGROUP_SIZE), Math.ceil(GRID_SIZE / WORKGROUP_SIZE))
       computePass.end()
-
-      // Start a render pass
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          loadOp: "clear",
-          clearValue: { r: 0, g: 0, b: 0.4, a: 1 }, // Dark blue background
-          storeOp: "store",
-        }]
+      
+      device.queue.submit([commandEncoder.finish()])
+      
+      // Read back the updated state
+      const readBuffer = device.createBuffer({
+        size: webGPUState.cellStateArray.byteLength,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
       })
-
-      // Draw the grid
-      pass.setPipeline(cellPipeline)
-      pass.setBindGroup(0, bindGroups[(currentStep + 1) % 2]) // Use updated state
-      pass.setVertexBuffer(0, vertexBuffer)
-      pass.draw(6, GRID_SIZE * GRID_SIZE) // 6 vertices, GRID_SIZE * GRID_SIZE instances
-
-      // End the render pass and submit the command buffer
-      pass.end()
-      device.queue.submit([encoder.finish()])
-
-      // Increment the step count after submission
-      stepRef.current = currentStep + 1
+      
+      const commandEncoder2 = device.createCommandEncoder()
+      commandEncoder2.copyBufferToBuffer(
+        currentStep % 2 === 0 ? webGPUState.cellStateStorageB : webGPUState.cellStateStorageA,
+        0,
+        readBuffer,
+        0,
+        webGPUState.cellStateArray.byteLength
+      )
+      device.queue.submit([commandEncoder2.finish()])
+      
+      readBuffer.mapAsync(GPUMapMode.READ).then(() => {
+        const newStates = new Uint32Array(readBuffer.getMappedRange())
+        const floatStates = new Float32Array(newStates.length)
+        for (let i = 0; i < newStates.length; i++) {
+          floatStates[i] = newStates[i]
+        }
+        
+        // Update the material's instance state attribute
+        if (meshRef.current) {
+          const instanceStateAttribute = meshRef.current.geometry.getAttribute('instanceState')
+          if (instanceStateAttribute) {
+            instanceStateAttribute.array = floatStates
+            instanceStateAttribute.needsUpdate = true
+          }
+        }
+        
+        readBuffer.unmap()
+      })
+      
+      stepRef.current++
     }
 
-    // Start the render loop with setInterval
-    intervalRef.current = setInterval(updateGrid, UPDATE_INTERVAL)
+    // Start simulation loop
+    intervalRef.current = setInterval(updateSimulation, UPDATE_INTERVAL)
 
-    // Cleanup function
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
       }
-      window.removeEventListener('resize', handleResize)
     }
   }, [webGPUState.isInitialized, webGPUState.error])
 
+  // Set up instance attributes
+  useEffect(() => {
+    if (geometry && cellStates) {
+      geometry.setAttribute('instanceState', new THREE.InstancedBufferAttribute(cellStates, 1))
+    }
+  }, [geometry, cellStates])
+
+  // Error handling
   if (webGPUState.error) {
     return (
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        color: 'white',
-        textAlign: 'center',
-        fontFamily: 'monospace',
-        maxWidth: '600px',
-        padding: '20px'
-      }}>
-        <h2>WebGPU Error</h2>
-        <p>{webGPUState.error}</p>
-        <p>Please use a browser that supports WebGPU:</p>
-        <ul style={{ textAlign: 'left', display: 'inline-block' }}>
-          <li>Chrome Canary (with WebGPU flag enabled)</li>
-          <li>Edge Canary (with WebGPU flag enabled)</li>
-          <li>Firefox Nightly (with WebGPU flag enabled)</li>
-        </ul>
-        <p style={{ marginTop: '20px', fontSize: '14px' }}>
-          To enable WebGPU in Chrome Canary:<br/>
-          1. Go to chrome://flags/<br/>
-          2. Search for "WebGPU"<br/>
-          3. Enable "Unsafe WebGPU"<br/>
-          4. Restart browser
-        </p>
-      </div>
+      <mesh>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="red" />
+      </mesh>
+    )
+  }
+
+  if (!webGPUState.isInitialized) {
+    return (
+      <mesh>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="yellow" />
+      </mesh>
     )
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        display: 'block',
-        background: '#000'
-      }}
+    <instancedMesh
+      ref={meshRef}
+      args={[geometry, material, GRID_SIZE * GRID_SIZE]}
     />
   )
-}
-
-export default WebGPUCellularAutomata 
+} 
