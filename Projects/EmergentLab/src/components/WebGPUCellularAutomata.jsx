@@ -91,30 +91,39 @@ const WebGPUCellularAutomata = () => {
         })
         device.queue.writeBuffer(uniformBuffer, 0, uniformArray)
 
-        // Create shader module with grid support
+        // Create shader module with colorful grid support
         const cellShaderModule = device.createShaderModule({
           label: "Cell shader",
           code: `
+            struct VertexInput {
+              @location(0) pos: vec2f,
+              @builtin(instance_index) instance: u32,
+            };
+
+            struct VertexOutput {
+              @builtin(position) pos: vec4f,
+              @location(0) cell: vec2f,
+            };
+
             @group(0) @binding(0) var<uniform> grid: vec2f;
 
             @vertex
-            fn vertexMain(@location(0) pos: vec2f,
-                          @builtin(instance_index) instance: u32) ->
-              @builtin(position) vec4f {
-
-              let i = f32(instance);
-              // Compute the cell coordinate from the instance_index
+            fn vertexMain(input: VertexInput) -> VertexOutput {
+              let i = f32(input.instance);
               let cell = vec2f(i % grid.x, floor(i / grid.x));
-
               let cellOffset = cell / grid * 2;
-              let gridPos = (pos + 1) / grid - 1 + cellOffset;
-
-              return vec4f(gridPos, 0, 1);
+              let gridPos = (input.pos + 1) / grid - 1 + cellOffset;
+              
+              var output: VertexOutput;
+              output.pos = vec4f(gridPos, 0, 1);
+              output.cell = cell;
+              return output;
             }
 
             @fragment
-            fn fragmentMain() -> @location(0) vec4f {
-              return vec4f(1, 0, 0, 1); // Red color
+            fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+              let c = input.cell / grid;
+              return vec4f(c, 1-c.x, 1);
             }
           `
         })
@@ -161,7 +170,7 @@ const WebGPUCellularAutomata = () => {
           bindGroup
         })
 
-        console.log(`WebGPU initialized successfully with ${GRID_SIZE}x${GRID_SIZE} grid rendering!`)
+        console.log(`WebGPU initialized successfully with colorful ${GRID_SIZE}x${GRID_SIZE} grid rendering!`)
       } catch (error) {
         console.error("WebGPU initialization failed:", error)
         setWebGPUState(prev => ({
