@@ -3,17 +3,24 @@ import React, { useRef, useEffect, useState } from 'react'
 const WebGPUCellularAutomata = () => {
   const canvasRef = useRef()
   const animationFrameRef = useRef()
+  
+  // Grid configuration
+  const GRID_SIZE = 32
+  
   const [webGPUState, setWebGPUState] = useState({
     device: null,
     context: null,
     canvasFormat: null,
     isInitialized: false,
     error: null,
-    // New state for geometry rendering
+    // Geometry rendering state
     vertexBuffer: null,
     vertexBufferLayout: null,
     cellShaderModule: null,
-    cellPipeline: null
+    cellPipeline: null,
+    // Grid rendering state
+    uniformBuffer: null,
+    bindGroup: null
   })
 
   useEffect(() => {
@@ -46,11 +53,11 @@ const WebGPUCellularAutomata = () => {
         // Define vertices for a square (two triangles)
         const vertices = new Float32Array([
           //   X,    Y,
-          -0.8, -0.8, // Triangle 1 (Blue)
+          -0.8, -0.8, // Triangle 1
            0.8, -0.8,
            0.8,  0.8,
 
-          -0.8, -0.8, // Triangle 2 (Red)
+          -0.8, -0.8, // Triangle 2
            0.8,  0.8,
           -0.8,  0.8,
         ])
@@ -75,14 +82,34 @@ const WebGPUCellularAutomata = () => {
           }],
         }
 
-        // Create shader module
+        // Create a uniform buffer that describes the grid
+        const uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE])
+        const uniformBuffer = device.createBuffer({
+          label: "Grid Uniforms",
+          size: uniformArray.byteLength,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        })
+        device.queue.writeBuffer(uniformBuffer, 0, uniformArray)
+
+        // Create shader module with grid support
         const cellShaderModule = device.createShaderModule({
           label: "Cell shader",
           code: `
+            @group(0) @binding(0) var<uniform> grid: vec2f;
+
             @vertex
-            fn vertexMain(@location(0) pos: vec2f) ->
+            fn vertexMain(@location(0) pos: vec2f,
+                          @builtin(instance_index) instance: u32) ->
               @builtin(position) vec4f {
-              return vec4f(pos, 0, 1);
+
+              let i = f32(instance);
+              // Compute the cell coordinate from the instance_index
+              let cell = vec2f(i % grid.x, floor(i / grid.x));
+
+              let cellOffset = cell / grid * 2;
+              let gridPos = (pos + 1) / grid - 1 + cellOffset;
+
+              return vec4f(gridPos, 0, 1);
             }
 
             @fragment
@@ -110,6 +137,16 @@ const WebGPUCellularAutomata = () => {
           }
         })
 
+        // Create bind group
+        const bindGroup = device.createBindGroup({
+          label: "Cell renderer bind group",
+          layout: cellPipeline.getBindGroupLayout(0),
+          entries: [{
+            binding: 0,
+            resource: { buffer: uniformBuffer }
+          }],
+        })
+
         setWebGPUState({
           device,
           context,
@@ -119,10 +156,12 @@ const WebGPUCellularAutomata = () => {
           vertexBuffer,
           vertexBufferLayout,
           cellShaderModule,
-          cellPipeline
+          cellPipeline,
+          uniformBuffer,
+          bindGroup
         })
 
-        console.log("WebGPU initialized successfully with geometry rendering!")
+        console.log(`WebGPU initialized successfully with ${GRID_SIZE}x${GRID_SIZE} grid rendering!`)
       } catch (error) {
         console.error("WebGPU initialization failed:", error)
         setWebGPUState(prev => ({
@@ -139,7 +178,7 @@ const WebGPUCellularAutomata = () => {
     if (!webGPUState.isInitialized || webGPUState.error) return
 
     const render = () => {
-      const { device, context, cellPipeline, vertexBuffer } = webGPUState
+      const { device, context, cellPipeline, vertexBuffer, bindGroup } = webGPUState
 
       // Create command encoder
       const encoder = device.createCommandEncoder()
@@ -154,10 +193,11 @@ const WebGPUCellularAutomata = () => {
         }]
       })
 
-      // Draw the square
+      // Draw the grid
       pass.setPipeline(cellPipeline)
       pass.setVertexBuffer(0, vertexBuffer)
-      pass.draw(6) // 6 vertices (2 triangles)
+      pass.setBindGroup(0, bindGroup)
+      pass.draw(6, GRID_SIZE * GRID_SIZE) // 6 vertices, GRID_SIZE * GRID_SIZE instances
 
       // End the render pass
       pass.end()

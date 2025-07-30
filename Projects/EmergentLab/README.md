@@ -33,7 +33,7 @@ npm run dev
 
 ## Current Status
 
-**Module 2 Complete**: Geometry rendering with vertex buffers, shaders, and render pipeline.
+**Module 3 Complete**: Grid rendering with uniforms, bind groups, and instancing.
 
 The app currently:
 - ✅ Initializes WebGPU device and adapter
@@ -41,7 +41,9 @@ The app currently:
 - ✅ Creates vertex buffers with square geometry (two triangles)
 - ✅ Implements vertex and fragment shaders in WGSL
 - ✅ Sets up render pipeline with proper vertex layout
-- ✅ Renders a red square on dark blue background
+- ✅ Creates uniform buffer for grid size (32x32)
+- ✅ Implements bind groups for shader resource binding
+- ✅ Uses instancing to render 1024 squares in a grid pattern
 - ✅ Uses requestAnimationFrame for smooth rendering
 - ✅ Handles WebGPU support errors gracefully
 
@@ -58,25 +60,43 @@ src/
 
 ## Technical Details
 
-### Module 2 Implementation:
-- **Vertex Buffer**: 6 vertices defining a square (2 triangles)
-- **Vertex Layout**: 8-byte stride with float32x2 position format
-- **Vertex Shader**: Transforms 2D positions to clip space
-- **Fragment Shader**: Outputs solid red color (vec4f(1, 0, 0, 1))
-- **Render Pipeline**: Configured with auto layout and proper targets
+### Module 3 Implementation:
+- **Grid Size**: 32x32 cells (1024 total squares)
+- **Uniform Buffer**: Contains grid dimensions for shader access
+- **Bind Group**: Connects uniform buffer to shader at binding 0
+- **Instancing**: Single draw call renders all 1024 squares
+- **Vertex Shader**: Uses instance_index to position each square in grid
+- **Fragment Shader**: Outputs solid red color for all squares
+
+### Grid Positioning Algorithm:
+```wgsl
+let i = f32(instance);
+let cell = vec2f(i % grid.x, floor(i / grid.x));
+let cellOffset = cell / grid * 2;
+let gridPos = (pos + 1) / grid - 1 + cellOffset;
+```
 
 ### Coordinate System:
 - Uses Normalized Device Coordinates (NDC)
-- Canvas center at (0, 0)
-- Square vertices at (-0.8, -0.8) to (0.8, 0.8)
+- Grid starts at bottom-left corner
+- Each cell is positioned using instance_index calculation
+- Canvas divided into 32x32 equal cells
+
+## Visual Result
+
+You should see a **32x32 grid of red squares** on a **dark blue background**, demonstrating:
+- Successful uniform buffer communication with shaders
+- Proper bind group resource binding
+- Efficient instanced rendering of 1024 squares
+- Correct grid positioning using instance_index
 
 ## Next Steps
 
 The project is ready for the next module. Each module will build upon the previous one, adding new functionality like:
 - Compute shaders for simulation logic
 - Game of Life rules implementation
-- Grid-based rendering system
-- Animation and state management
+- Cell state management and animation
+- Interactive controls and visualization
 
 ## Browser Support
 
