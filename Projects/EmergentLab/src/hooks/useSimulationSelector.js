@@ -5,7 +5,8 @@ export function useSimulationSelector() {
     simulationType: {
       label: 'Type',
       options: {
-        'Game of Life': 'gameOfLife'
+        'Game of Life': 'gameOfLife',
+        'SmoothLife v0.5': 'smoothLifeV05'
       },
       value: 'gameOfLife'
     }
