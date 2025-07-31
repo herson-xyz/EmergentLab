@@ -151,7 +151,90 @@ export default function WebGPUCellularAutomata() {
 
           // Create compute shader based on simulation type
   const getShaderCode = (type) => {
-    if (type === 'smoothLifeV05') {
+    if (type === 'smoothLifeV1') {
+      return `
+        @group(0) @binding(0) var<uniform> grid: vec2f;
+        @group(0) @binding(1) var<storage> cellStateIn: array<f32>;
+        @group(0) @binding(2) var<storage, read_write> cellStateOut: array<f32>;
+
+        fn cellIndex(cell: vec2u) -> u32 {
+          return cell.y * u32(grid.x) + cell.x;
+        }
+
+        @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
+        fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
+          let i = cellIndex(cell.xy);
+          if (cell.x >= u32(grid.x) || cell.y >= u32(grid.y)) {
+            return;
+          }
+
+          let pos = cell.xy;
+          let gridSize = u32(grid.x);
+          let dt: f32 = 0.3;
+
+          // === Begin CalculateNeighbors (inlined) ===
+          let cellPos = vec2f(pos);
+          var innerKernelCellTotal: f32 = 0.0;
+          var innerKernelStateSum: f32 = 0.0;
+          var outerKernelCellTotal: f32 = 0.0;
+          var outerKernelStateSum: f32 = 0.0;
+
+          // SmoothLife v1 parameters - we'll make these uniforms later
+          let innerRadius: f32 = 3.0;
+          let outerRadius: f32 = 10.0;
+          let b1: f32 = 0.257;
+          let b2: f32 = 0.336;
+          let d1: f32 = 0.365;
+          let d2: f32 = 0.549;
+
+          let r: i32 = i32(outerRadius);
+
+          for (var x = -r; x <= r; x = x + 1) {
+            for (var y = -r; y <= r; y = y + 1) {
+              let neighborCell = cellPos + vec2f(f32(x), f32(y));
+              let dist_from_center = length(cellPos - neighborCell);
+              let logres: f32 = 4.0;
+              let weight: f32 = 1.0 / (1.0 + exp(logres * (dist_from_center - outerRadius)));
+
+              let wrappedX = (u32(cellPos.x) + u32(x) + gridSize) % gridSize;
+              let wrappedY = (u32(cellPos.y) + u32(y) + gridSize) % gridSize;
+              let ni = wrappedY * gridSize + wrappedX;
+              let neighborState = cellStateIn[ni];
+
+              if (dist_from_center < innerRadius) {
+                innerKernelCellTotal = innerKernelCellTotal + weight;
+                innerKernelStateSum = innerKernelStateSum + (weight * neighborState);
+              } else if (dist_from_center > innerRadius && dist_from_center <= outerRadius) {
+                outerKernelCellTotal = outerKernelCellTotal + weight;
+                outerKernelStateSum = outerKernelStateSum + (weight * neighborState);
+              }
+            }
+          }
+
+          let innerAvg = innerKernelStateSum / max(innerKernelCellTotal, 0.0001);
+          let outerAvg = outerKernelStateSum / max(outerKernelCellTotal, 0.0001);
+          // === End CalculateNeighbors ===
+
+          // === Begin life_dynamics_function (inlined) ===
+          let steepness: f32 = 0.001;
+
+          let life_activation_inner = 1.0 / (1.0 + exp(-(innerAvg - 0.5) * (4.0 / steepness)));
+          let adaptive1 = b1 * (1.0 - life_activation_inner) + d1 * life_activation_inner;
+          let adaptive2 = b2 * (1.0 - life_activation_inner) + d2 * life_activation_inner;
+
+          let life_activation_outer1 = 1.0 / (1.0 + exp(-(outerAvg - adaptive1) * (4.0 / steepness)));
+          let life_activation_outer2 = 1.0 / (1.0 + exp(-(outerAvg - adaptive2) * (4.0 / steepness)));
+
+          let rateOfChange = life_activation_outer1 * (1.0 - life_activation_outer2);
+          // === End life_dynamics_function ===
+
+          let currentState = cellStateIn[i];
+          let newCellState = currentState + dt * (rateOfChange - currentState);
+
+          cellStateOut[i] = newCellState;
+        }
+      `
+    } else if (type === 'smoothLifeV05') {
       return `
         @group(0) @binding(0) var<uniform> grid: vec2f;
         @group(0) @binding(1) var<storage> cellStateIn: array<f32>;
