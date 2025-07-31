@@ -28,7 +28,7 @@ export default function WebGPUCellularAutomata() {
   const params = SimulationParameters()
   
   // Fallback values in case Leva hasn't mounted yet
-  const smoothLifeV1Params = params?.Simulation?.['SmoothLife v1'] || {
+  const smoothLifeV1Params = params || {
     innerRadius: 1.0,
     outerRadius: 3.0,
     b1: 0.257,
@@ -38,9 +38,6 @@ export default function WebGPUCellularAutomata() {
     dt: 0.1,
     steepness: 0.001
   }
-  
-  // Debug: log the simulation type
-  console.log('Current simulation type:', simulationType)
   
   // Handle visual updates in the render loop
   useFrame(() => {
@@ -54,77 +51,56 @@ export default function WebGPUCellularAutomata() {
         }
         instanceStateAttribute.needsUpdate = true
         
-        // Debug: check if the array actually changed (safely)
-        try {
-          const oldActive = oldArray.filter(val => val > 0.5).length
-          const newActive = pendingUpdate.filter(val => val > 0.5).length
-          console.log('Applied pending update in useFrame - Old active:', oldActive, 'New active:', newActive, 'Array changed:', oldActive !== newActive)
-        } catch (e) {
-          console.log('Applied pending update in useFrame - Array updated successfully')
-        }
-        
         // Force material to update
         if (meshRef.current.material) {
           meshRef.current.material.needsUpdate = true
         }
-      } else {
-        console.warn('No instanceState attribute in useFrame')
       }
       setPendingUpdate(null)
     }
   })
   
-  // Trigger reset on mount and when simulation type changes
+  // Trigger reset on mount and when simulation type or initial state changes
   useEffect(() => {
-    console.log('Triggering reset for simulation type:', simulationType)
     // Only trigger reset if WebGPU is already initialized
     if (webGPUState.isInitialized) {
       setResetFlag(true)
     }
-  }, [simulationType, webGPUState.isInitialized])
+  }, [simulationType, params?.initialState, webGPUState.isInitialized])
 
   // Update SmoothLife v1 parameters when they change
   useEffect(() => {
     if (webGPUState.isInitialized && simulationType === 'smoothLifeV1' && webGPUState.smoothLifeV1UniformBuffer1 && webGPUState.smoothLifeV1UniformBuffer2) {
-      console.log('Updating SmoothLife v1 parameters:', {
-        innerRadius: smoothLifeV1Params.innerRadius,
-        outerRadius: smoothLifeV1Params.outerRadius,
-        b1: smoothLifeV1Params.b1,
-        b2: smoothLifeV1Params.b2,
-        d1: smoothLifeV1Params.d1,
-        d2: smoothLifeV1Params.d2,
-        dt: smoothLifeV1Params.dt,
-        steepness: smoothLifeV1Params.steepness
-      })
       const paramArray1 = new Float32Array([
-        smoothLifeV1Params.innerRadius,
-        smoothLifeV1Params.outerRadius,
-        smoothLifeV1Params.dt,
-        smoothLifeV1Params.steepness
+        params?.innerRadius || smoothLifeV1Params.innerRadius,
+        params?.outerRadius || smoothLifeV1Params.outerRadius,
+        params?.dt || smoothLifeV1Params.dt,
+        params?.steepness || smoothLifeV1Params.steepness
       ])
       const paramArray2 = new Float32Array([
-        smoothLifeV1Params.b1,
-        smoothLifeV1Params.b2,
-        smoothLifeV1Params.d1,
-        smoothLifeV1Params.d2
+        params?.b1 || smoothLifeV1Params.b1,
+        params?.b2 || smoothLifeV1Params.b2,
+        params?.d1 || smoothLifeV1Params.d1,
+        params?.d2 || smoothLifeV1Params.d2
       ])
       
       webGPUState.device.queue.writeBuffer(webGPUState.smoothLifeV1UniformBuffer1, 0, paramArray1)
       webGPUState.device.queue.writeBuffer(webGPUState.smoothLifeV1UniformBuffer2, 0, paramArray2)
     }
-  }, [smoothLifeV1Params, webGPUState.isInitialized, simulationType])
+  }, [
+    params,
+    webGPUState.isInitialized,
+    simulationType
+  ])
   
   // Control functions for play/pause
   const handlePlay = () => {
-    console.log('Play clicked - starting simulation')
     setIsRunning(true)
   }
   const handlePause = () => {
-    console.log('Pause clicked - pausing simulation')
     setIsRunning(false)
   }
   const handleReset = () => {
-    console.log('Reset clicked - resetting simulation')
     setResetFlag(true)
   }
   
@@ -140,7 +116,6 @@ export default function WebGPUCellularAutomata() {
 
   // Initialize WebGPU
   useEffect(() => {
-    console.log('Initializing WebGPU for simulation type:', simulationType)
     
     // Clear any existing state first
     setWebGPUState({
@@ -150,7 +125,7 @@ export default function WebGPUCellularAutomata() {
     })
     
     async function initializeWebGPU() {
-      console.log('Starting WebGPU initialization for:', simulationType)
+      
       try {
         // Check WebGPU support
         if (!navigator.gpu) {
@@ -165,51 +140,236 @@ export default function WebGPUCellularAutomata() {
 
         const device = await adapter.requestDevice()
         
-        // Create cell state arrays based on simulation type
-        const cellStateArray = new Float32Array(GRID_SIZE * GRID_SIZE)
-        
-        if (simulationType === 'gameOfLife') {
-          // Game of Life: binary random initialization
-          for (let i = 0; i < cellStateArray.length; i++) {
-            cellStateArray[i] = Math.random() > 0.6 ? 1.0 : 0.0
-          }
-        } else if (simulationType === 'smoothLifeV05' || simulationType === 'smoothLifeV1') {
-          // SmoothLife: structured blob initialization
-          for (let i = 0; i < cellStateArray.length; i++) {
-            const x = i % GRID_SIZE
-            const y = Math.floor(i / GRID_SIZE)
-            
-            // Create some structured patterns for SmoothLife
-            const centerX = GRID_SIZE / 2
-            const centerY = GRID_SIZE / 2
-            const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
-            
-            if (dist < 20) {
-              // Create a central blob
-              cellStateArray[i] = Math.random() * 0.5 + 0.3
-            } else if (Math.random() > 0.95) {
-              // Random small blobs
-              cellStateArray[i] = Math.random() * 0.8 + 0.2
-            } else {
-              // Background noise
-              cellStateArray[i] = Math.random() * 0.1
-            }
+        // Helper function to generate initial states
+        const generateInitialState = (type, initialStateType) => {
+          const array = new Float32Array(GRID_SIZE * GRID_SIZE)
+          
+          switch (initialStateType) {
+            case 'random':
+              if (type === 'gameOfLife') {
+                // Binary random for Game of Life
+                for (let i = 0; i < array.length; i++) {
+                  array[i] = Math.random() > 0.6 ? 1.0 : 0.0
+                }
+              } else {
+                // Continuous random for SmoothLife
+                for (let i = 0; i < array.length; i++) {
+                  array[i] = Math.random()
+                }
+              }
+              break
+              
+            case 'centralBlob':
+              for (let i = 0; i < array.length; i++) {
+                const x = i % GRID_SIZE
+                const y = Math.floor(i / GRID_SIZE)
+                const centerX = GRID_SIZE / 2
+                const centerY = GRID_SIZE / 2
+                const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+                
+                if (dist < 20) {
+                  array[i] = type === 'gameOfLife' ? 1.0 : (Math.random() * 0.5 + 0.3)
+                } else {
+                  array[i] = 0.0
+                }
+              }
+              break
+              
+            case 'multipleBlobs':
+              for (let i = 0; i < array.length; i++) {
+                const x = i % GRID_SIZE
+                const y = Math.floor(i / GRID_SIZE)
+                
+                // Create several blobs
+                let hasBlob = false
+                for (let blob = 0; blob < 5; blob++) {
+                  const centerX = GRID_SIZE * (0.2 + blob * 0.15)
+                  const centerY = GRID_SIZE * (0.2 + (blob % 2) * 0.6)
+                  const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+                  
+                  if (dist < 15) {
+                    hasBlob = true
+                    break
+                  }
+                }
+                
+                if (hasBlob) {
+                  array[i] = type === 'gameOfLife' ? 1.0 : (Math.random() * 0.8 + 0.2)
+                } else {
+                  array[i] = 0.0
+                }
+              }
+              break
+              
+            case 'glider':
+              if (type === 'gameOfLife') {
+                // Game of Life glider pattern
+                const gliderPattern = [
+                  [0, 1, 0],
+                  [0, 0, 1],
+                  [1, 1, 1]
+                ]
+                const startX = Math.floor(GRID_SIZE / 2) - 1
+                const startY = Math.floor(GRID_SIZE / 2) - 1
+                
+                for (let i = 0; i < array.length; i++) {
+                  const x = i % GRID_SIZE
+                  const y = Math.floor(i / GRID_SIZE)
+                  const patternX = x - startX
+                  const patternY = y - startY
+                  
+                  if (patternX >= 0 && patternX < 3 && patternY >= 0 && patternY < 3) {
+                    array[i] = gliderPattern[patternY][patternX]
+                  } else {
+                    array[i] = 0.0
+                  }
+                }
+              } else {
+                // For SmoothLife, create a glider-like pattern
+                for (let i = 0; i < array.length; i++) {
+                  const x = i % GRID_SIZE
+                  const y = Math.floor(i / GRID_SIZE)
+                  const centerX = GRID_SIZE / 2
+                  const centerY = GRID_SIZE / 2
+                  const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+                  
+                  if (dist < 10) {
+                    array[i] = Math.random() * 0.5 + 0.3
+                  } else {
+                    array[i] = 0.0
+                  }
+                }
+              }
+              break
+              
+            case 'stillLife':
+              if (type === 'gameOfLife') {
+                // Game of Life block pattern
+                const blockPattern = [
+                  [1, 1],
+                  [1, 1]
+                ]
+                const startX = Math.floor(GRID_SIZE / 2) - 1
+                const startY = Math.floor(GRID_SIZE / 2) - 1
+                
+                for (let i = 0; i < array.length; i++) {
+                  const x = i % GRID_SIZE
+                  const y = Math.floor(i / GRID_SIZE)
+                  const patternX = x - startX
+                  const patternY = y - startY
+                  
+                  if (patternX >= 0 && patternX < 2 && patternY >= 0 && patternY < 2) {
+                    array[i] = blockPattern[patternY][patternX]
+                  } else {
+                    array[i] = 0.0
+                  }
+                }
+              } else {
+                // For SmoothLife, create a stable pattern
+                for (let i = 0; i < array.length; i++) {
+                  const x = i % GRID_SIZE
+                  const y = Math.floor(i / GRID_SIZE)
+                  const centerX = GRID_SIZE / 2
+                  const centerY = GRID_SIZE / 2
+                  const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+                  
+                  if (dist < 8) {
+                    array[i] = 0.5
+                  } else {
+                    array[i] = 0.0
+                  }
+                }
+              }
+              break
+              
+            case 'oscillator':
+              if (type === 'gameOfLife') {
+                // Game of Life blinker pattern
+                const blinkerPattern = [1, 1, 1]
+                const startX = Math.floor(GRID_SIZE / 2) - 1
+                const startY = Math.floor(GRID_SIZE / 2)
+                
+                for (let i = 0; i < array.length; i++) {
+                  const x = i % GRID_SIZE
+                  const y = Math.floor(i / GRID_SIZE)
+                  const patternX = x - startX
+                  const patternY = y - startY
+                  
+                  if (patternX >= 0 && patternX < 3 && patternY === 0) {
+                    array[i] = blinkerPattern[patternX]
+                  } else {
+                    array[i] = 0.0
+                  }
+                }
+              } else {
+                // For SmoothLife, create an oscillating pattern
+                for (let i = 0; i < array.length; i++) {
+                  const x = i % GRID_SIZE
+                  const y = Math.floor(i / GRID_SIZE)
+                  const centerX = GRID_SIZE / 2
+                  const centerY = GRID_SIZE / 2
+                  const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+                  
+                  if (dist < 12) {
+                    array[i] = Math.random() * 0.3 + 0.4
+                  } else {
+                    array[i] = 0.0
+                  }
+                }
+              }
+              break
+              
+            case 'empty':
+              // All cells dead/zero
+              for (let i = 0; i < array.length; i++) {
+                array[i] = 0.0
+              }
+              break
+              
+            case 'full':
+              // All cells alive/one
+              for (let i = 0; i < array.length; i++) {
+                array[i] = 1.0
+              }
+              break
+              
+            case 'checkerboard':
+              // Alternating pattern
+              for (let i = 0; i < array.length; i++) {
+                const x = i % GRID_SIZE
+                const y = Math.floor(i / GRID_SIZE)
+                const value = (x + y) % 2 === 0 ? 1.0 : 0.0
+                array[i] = type === 'gameOfLife' ? value : (value * 0.8 + 0.1)
+              }
+              break
+              
+            case 'cross':
+              // Cross pattern
+              for (let i = 0; i < array.length; i++) {
+                const x = i % GRID_SIZE
+                const y = Math.floor(i / GRID_SIZE)
+                const centerX = GRID_SIZE / 2
+                const centerY = GRID_SIZE / 2
+                const isCross = Math.abs(x - centerX) < 3 || Math.abs(y - centerY) < 3
+                
+                array[i] = isCross ? (type === 'gameOfLife' ? 1.0 : 0.8) : 0.0
+              }
+              break
+              
+            default:
+              // Fallback to random
+              for (let i = 0; i < array.length; i++) {
+                array[i] = type === 'gameOfLife' ? (Math.random() > 0.6 ? 1.0 : 0.0) : Math.random()
+              }
           }
           
-          // Alternative: random continuous values (commented out)
-          /*
-          for (let i = 0; i < cellStateArray.length; i++) {
-            cellStateArray[i] = Math.random()
-          }
-          */
-        } else {
-          // Fallback: random initialization
-          for (let i = 0; i < cellStateArray.length; i++) {
-            cellStateArray[i] = Math.random() > 0.6 ? 1.0 : 0.0
-          }
+          return array
         }
         
-        console.log('Initial cell state for', simulationType, '- Active cells:', cellStateArray.filter(val => val > 0.5).length)
+        // Generate initial state based on simulation type and selected initial state
+        const cellStateArray = generateInitialState(simulationType, params?.initialState || 'random')
+        
+        
 
         // Create storage buffers for ping-pong pattern
         const cellStateStorageA = device.createBuffer({
@@ -267,16 +427,6 @@ export default function WebGPUCellularAutomata() {
           smoothLifeV1UniformBuffer1 = createSmoothLifeV1UniformBuffer1()
           smoothLifeV1UniformBuffer2 = createSmoothLifeV1UniformBuffer2()
           
-          console.log('Initial SmoothLife v1 parameters:', {
-            innerRadius: smoothLifeV1Params.innerRadius,
-            outerRadius: smoothLifeV1Params.outerRadius,
-            b1: smoothLifeV1Params.b1,
-            b2: smoothLifeV1Params.b2,
-            d1: smoothLifeV1Params.d1,
-            d2: smoothLifeV1Params.d2,
-            dt: smoothLifeV1Params.dt,
-            steepness: smoothLifeV1Params.steepness
-          })
           
           device.queue.writeBuffer(smoothLifeV1UniformBuffer1, 0, new Float32Array([
             smoothLifeV1Params.innerRadius,
@@ -295,6 +445,8 @@ export default function WebGPUCellularAutomata() {
 
         // Create compute shader based on simulation type
         const getShaderCode = (type) => {
+          // Add timestamp to force shader recompilation
+          const timestamp = Date.now();
           if (type === 'gameOfLife') {
             return `
               @group(0) @binding(0) var<uniform> grid: vec2f;
@@ -353,6 +505,7 @@ export default function WebGPUCellularAutomata() {
             `
           } else if (type === 'smoothLifeV1') {
             return `
+              // Shader compiled at: ${timestamp}
               @group(0) @binding(0) var<uniform> grid: vec2f;
               @group(0) @binding(1) var<storage> cellStateIn: array<f32>;
               @group(0) @binding(2) var<storage, read_write> cellStateOut: array<f32>;
@@ -388,6 +541,24 @@ export default function WebGPUCellularAutomata() {
                 let b2: f32 = smoothLifeV1Params2.y;
                 let d1: f32 = smoothLifeV1Params2.z;
                 let d2: f32 = smoothLifeV1Params2.w;
+
+                // Debug: output parameter values to the first 4 cells for debugging
+                if (i < 4) {
+                  let steepness: f32 = smoothLifeV1Params.w;
+                  if (i == 0) {
+                    cellStateOut[i] = innerRadius;
+                  }
+                  if (i == 1) {
+                    cellStateOut[i] = outerRadius;
+                  }
+                  if (i == 2) {
+                    cellStateOut[i] = dt;
+                  }
+                  if (i == 3) {
+                    cellStateOut[i] = steepness;
+                  }
+                  return;
+                }
 
                 let r: i32 = i32(outerRadius);
 
@@ -534,7 +705,6 @@ export default function WebGPUCellularAutomata() {
         }
 
         const shaderCode = getShaderCode(simulationType)
-        console.log('Creating shader for type:', simulationType, 'Shader length:', shaderCode.length)
         
         const simulationShaderModule = device.createShaderModule({
           code: shaderCode
@@ -616,6 +786,7 @@ export default function WebGPUCellularAutomata() {
             { binding: 3, resource: { buffer: smoothLifeV1UniformBuffer1 } },
             { binding: 4, resource: { buffer: smoothLifeV1UniformBuffer2 } }
           )
+
         }
         
         const bindGroupA = device.createBindGroup({
@@ -723,13 +894,8 @@ export default function WebGPUCellularAutomata() {
       // Skip update if simulation is paused
       if (!isRunning) return
       
-      console.log('Running simulation step:', stepRef.current, 'Type:', simulationType)
-      
       const currentStep = stepRef.current
       const device = webGPUState.device
-      
-      // Debug: log the current buffer states
-      console.log('Current step:', currentStep, 'Using bind group:', currentStep % 2 === 0 ? 'A' : 'B')
       
       // Run compute shader
       const commandEncoder = device.createCommandEncoder()
@@ -760,17 +926,17 @@ export default function WebGPUCellularAutomata() {
       readBuffer.mapAsync(GPUMapMode.READ).then(() => {
         const newStates = new Float32Array(readBuffer.getMappedRange())
         
-        // Debug: check if data is changing
-        const activeCells = newStates.filter(val => val > 0.5).length
-        const avgValue = newStates.reduce((sum, val) => sum + val, 0) / newStates.length
-        console.log('Step', currentStep, '- Active cells:', activeCells, 'Avg value:', avgValue.toFixed(4), 'First few values:', newStates.slice(0, 5))
+        // Debug: for SmoothLife v1, check if parameter values are being used
+        if (simulationType === 'smoothLifeV1') {
+          console.log('SmoothLife v1 debug - First 4 values (should be parameters):', newStates.slice(0, 4))
+        }
+
         
         // Copy the data before unmapping to avoid detached ArrayBuffer
         const copiedStates = new Float32Array(newStates)
         
         // Queue the update for the next frame
         setPendingUpdate(copiedStates)
-        console.log('Queued update for next frame')
         
         readBuffer.unmap()
       })
@@ -791,7 +957,6 @@ export default function WebGPUCellularAutomata() {
   // Set up instance attributes
   useEffect(() => {
     if (geometry && cellStates) {
-      console.log('Setting up instance attributes with', cellStates.length, 'cells')
       geometry.setAttribute('instanceState', new THREE.InstancedBufferAttribute(cellStates, 1))
     }
   }, [geometry, cellStates])
@@ -800,51 +965,220 @@ export default function WebGPUCellularAutomata() {
   useEffect(() => {
     if (!resetFlag || !webGPUState.isInitialized) return
 
-    console.log('Resetting simulation state for type:', simulationType)
-    
-    // Create appropriate initial state based on simulation type
-    const newCellStates = new Float32Array(GRID_SIZE * GRID_SIZE)
-    
-    if (simulationType === 'gameOfLife') {
-      // Game of Life: binary random initialization
-      for (let i = 0; i < newCellStates.length; i++) {
-        newCellStates[i] = Math.random() > 0.6 ? 1.0 : 0.0
-      }
-    } else if (simulationType === 'smoothLifeV05' || simulationType === 'smoothLifeV1') {
-      // SmoothLife: structured blob initialization
-      for (let i = 0; i < newCellStates.length; i++) {
-        const x = i % GRID_SIZE
-        const y = Math.floor(i / GRID_SIZE)
-        
-        // Create some structured patterns for SmoothLife
-        const centerX = GRID_SIZE / 2
-        const centerY = GRID_SIZE / 2
-        const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
-        
-        if (dist < 20) {
-          // Create a central blob
-          newCellStates[i] = Math.random() * 0.5 + 0.3
-        } else if (Math.random() > 0.95) {
-          // Random small blobs
-          newCellStates[i] = Math.random() * 0.8 + 0.2
-        } else {
-          // Background noise
-          newCellStates[i] = Math.random() * 0.1
-        }
+    // Helper function to generate initial states (same as in initializeWebGPU)
+    const generateInitialState = (type, initialStateType) => {
+      const array = new Float32Array(GRID_SIZE * GRID_SIZE)
+      
+      switch (initialStateType) {
+        case 'random':
+          if (type === 'gameOfLife') {
+            for (let i = 0; i < array.length; i++) {
+              array[i] = Math.random() > 0.6 ? 1.0 : 0.0
+            }
+          } else {
+            for (let i = 0; i < array.length; i++) {
+              array[i] = Math.random()
+            }
+          }
+          break
+          
+        case 'centralBlob':
+          for (let i = 0; i < array.length; i++) {
+            const x = i % GRID_SIZE
+            const y = Math.floor(i / GRID_SIZE)
+            const centerX = GRID_SIZE / 2
+            const centerY = GRID_SIZE / 2
+            const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+            
+            if (dist < 20) {
+              array[i] = type === 'gameOfLife' ? 1.0 : (Math.random() * 0.5 + 0.3)
+            } else {
+              array[i] = 0.0
+            }
+          }
+          break
+          
+        case 'multipleBlobs':
+          for (let i = 0; i < array.length; i++) {
+            const x = i % GRID_SIZE
+            const y = Math.floor(i / GRID_SIZE)
+            
+            let hasBlob = false
+            for (let blob = 0; blob < 5; blob++) {
+              const centerX = GRID_SIZE * (0.2 + blob * 0.15)
+              const centerY = GRID_SIZE * (0.2 + (blob % 2) * 0.6)
+              const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+              
+              if (dist < 15) {
+                hasBlob = true
+                break
+              }
+            }
+            
+            if (hasBlob) {
+              array[i] = type === 'gameOfLife' ? 1.0 : (Math.random() * 0.8 + 0.2)
+            } else {
+              array[i] = 0.0
+            }
+          }
+          break
+          
+        case 'glider':
+          if (type === 'gameOfLife') {
+            const gliderPattern = [
+              [0, 1, 0],
+              [0, 0, 1],
+              [1, 1, 1]
+            ]
+            const startX = Math.floor(GRID_SIZE / 2) - 1
+            const startY = Math.floor(GRID_SIZE / 2) - 1
+            
+            for (let i = 0; i < array.length; i++) {
+              const x = i % GRID_SIZE
+              const y = Math.floor(i / GRID_SIZE)
+              const patternX = x - startX
+              const patternY = y - startY
+              
+              if (patternX >= 0 && patternX < 3 && patternY >= 0 && patternY < 3) {
+                array[i] = gliderPattern[patternY][patternX]
+              } else {
+                array[i] = 0.0
+              }
+            }
+          } else {
+            for (let i = 0; i < array.length; i++) {
+              const x = i % GRID_SIZE
+              const y = Math.floor(i / GRID_SIZE)
+              const centerX = GRID_SIZE / 2
+              const centerY = GRID_SIZE / 2
+              const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+              
+              if (dist < 10) {
+                array[i] = Math.random() * 0.5 + 0.3
+              } else {
+                array[i] = 0.0
+              }
+            }
+          }
+          break
+          
+        case 'stillLife':
+          if (type === 'gameOfLife') {
+            const blockPattern = [
+              [1, 1],
+              [1, 1]
+            ]
+            const startX = Math.floor(GRID_SIZE / 2) - 1
+            const startY = Math.floor(GRID_SIZE / 2) - 1
+            
+            for (let i = 0; i < array.length; i++) {
+              const x = i % GRID_SIZE
+              const y = Math.floor(i / GRID_SIZE)
+              const patternX = x - startX
+              const patternY = y - startY
+              
+              if (patternX >= 0 && patternX < 2 && patternY >= 0 && patternY < 2) {
+                array[i] = blockPattern[patternY][patternX]
+              } else {
+                array[i] = 0.0
+              }
+            }
+          } else {
+            for (let i = 0; i < array.length; i++) {
+              const x = i % GRID_SIZE
+              const y = Math.floor(i / GRID_SIZE)
+              const centerX = GRID_SIZE / 2
+              const centerY = GRID_SIZE / 2
+              const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+              
+              if (dist < 8) {
+                array[i] = 0.5
+              } else {
+                array[i] = 0.0
+              }
+            }
+          }
+          break
+          
+        case 'oscillator':
+          if (type === 'gameOfLife') {
+            const blinkerPattern = [1, 1, 1]
+            const startX = Math.floor(GRID_SIZE / 2) - 1
+            const startY = Math.floor(GRID_SIZE / 2)
+            
+            for (let i = 0; i < array.length; i++) {
+              const x = i % GRID_SIZE
+              const y = Math.floor(i / GRID_SIZE)
+              const patternX = x - startX
+              const patternY = y - startY
+              
+              if (patternX >= 0 && patternX < 3 && patternY === 0) {
+                array[i] = blinkerPattern[patternX]
+              } else {
+                array[i] = 0.0
+              }
+            }
+          } else {
+            for (let i = 0; i < array.length; i++) {
+              const x = i % GRID_SIZE
+              const y = Math.floor(i / GRID_SIZE)
+              const centerX = GRID_SIZE / 2
+              const centerY = GRID_SIZE / 2
+              const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+              
+              if (dist < 12) {
+                array[i] = Math.random() * 0.3 + 0.4
+              } else {
+                array[i] = 0.0
+              }
+            }
+          }
+          break
+          
+        case 'empty':
+          for (let i = 0; i < array.length; i++) {
+            array[i] = 0.0
+          }
+          break
+          
+        case 'full':
+          for (let i = 0; i < array.length; i++) {
+            array[i] = 1.0
+          }
+          break
+          
+        case 'checkerboard':
+          for (let i = 0; i < array.length; i++) {
+            const x = i % GRID_SIZE
+            const y = Math.floor(i / GRID_SIZE)
+            const value = (x + y) % 2 === 0 ? 1.0 : 0.0
+            array[i] = type === 'gameOfLife' ? value : (value * 0.8 + 0.1)
+          }
+          break
+          
+        case 'cross':
+          for (let i = 0; i < array.length; i++) {
+            const x = i % GRID_SIZE
+            const y = Math.floor(i / GRID_SIZE)
+            const centerX = GRID_SIZE / 2
+            const centerY = GRID_SIZE / 2
+            const isCross = Math.abs(x - centerX) < 3 || Math.abs(y - centerY) < 3
+            
+            array[i] = isCross ? (type === 'gameOfLife' ? 1.0 : 0.8) : 0.0
+          }
+          break
+          
+        default:
+          for (let i = 0; i < array.length; i++) {
+            array[i] = type === 'gameOfLife' ? (Math.random() > 0.6 ? 1.0 : 0.0) : Math.random()
+          }
       }
       
-      // Alternative: random continuous values (commented out)
-      /*
-      for (let i = 0; i < newCellStates.length; i++) {
-        newCellStates[i] = Math.random()
-      }
-      */
-    } else {
-      // Fallback: random initialization
-      for (let i = 0; i < newCellStates.length; i++) {
-        newCellStates[i] = Math.random() > 0.6 ? 1.0 : 0.0
-      }
+      return array
     }
+
+    // Generate new initial state based on simulation type and selected initial state
+    const newCellStates = generateInitialState(simulationType, params?.initialState || 'random')
 
     // Update WebGPU buffers
     if (webGPUState.device && webGPUState.cellStateStorageA && webGPUState.cellStateStorageB) {
@@ -867,7 +1201,6 @@ export default function WebGPUCellularAutomata() {
     // Clear reset flag
     setResetFlag(false)
     
-    console.log('Simulation reset complete for', simulationType)
   }, [resetFlag, webGPUState.isInitialized, webGPUState.device, webGPUState.cellStateStorageA, webGPUState.cellStateStorageB, simulationType])
 
   // Error handling
