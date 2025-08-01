@@ -19,7 +19,12 @@ export default function PostProcessing({ children }) {
     vignette: { value: 0.5, min: 0, max: 1, step: 0.1, label: 'Vignette' },
     cyanTint: { value: 0.15, min: 0, max: 0.5, step: 0.05, label: 'Cyan Tint' },
     colorBleeding: { value: 0.02, min: 0, max: 0.05, step: 0.001, label: 'Color Bleeding' },
-    bleedingIntensity: { value: 0.8, min: 0, max: 1, step: 0.1, label: 'Bleeding Intensity' }
+    bleedingIntensity: { value: 0.8, min: 0, max: 1, step: 0.1, label: 'Bleeding Intensity' },
+    bloomIntensity: { value: 0.8, min: 0, max: 2, step: 0.1, label: 'Bloom Intensity' },
+    bloomThreshold: { value: 0.6, min: 0, max: 1, step: 0.05, label: 'Bloom Threshold' },
+    bloomRadius: { value: 4.0, min: 1, max: 10, step: 0.5, label: 'Bloom Radius' },
+    brightness: { value: 1.2, min: 0.5, max: 2.0, step: 0.1, label: 'Brightness' },
+    gamma: { value: 1.0, min: 0.5, max: 1.5, step: 0.1, label: 'Gamma' }
   })
 
   // Initialize EffectComposer
@@ -59,6 +64,11 @@ export default function PostProcessing({ children }) {
       crtPassRef.current.uniforms.cyanTint.value = crtParams.cyanTint
       crtPassRef.current.uniforms.colorBleeding.value = crtParams.colorBleeding
       crtPassRef.current.uniforms.bleedingIntensity.value = crtParams.bleedingIntensity
+      crtPassRef.current.uniforms.bloomIntensity.value = crtParams.bloomIntensity
+      crtPassRef.current.uniforms.bloomThreshold.value = crtParams.bloomThreshold
+      crtPassRef.current.uniforms.bloomRadius.value = crtParams.bloomRadius
+      crtPassRef.current.uniforms.brightness.value = crtParams.brightness
+      crtPassRef.current.uniforms.gamma.value = crtParams.gamma
       
       // Only render if CRT is enabled
       if (crtParams.enabled) {

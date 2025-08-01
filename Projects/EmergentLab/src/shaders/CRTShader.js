@@ -8,7 +8,12 @@ export const CRTShader = {
     vignette: { value: 0.5 },
     cyanTint: { value: 0.15 },
     colorBleeding: { value: 0.02 },
-    bleedingIntensity: { value: 0.8 }
+    bleedingIntensity: { value: 0.8 },
+    bloomIntensity: { value: 0.8 },
+    bloomThreshold: { value: 0.6 },
+    bloomRadius: { value: 4.0 },
+    brightness: { value: 1.2 },
+    gamma: { value: 1.0 }
   },
 
   vertexShader: `
@@ -30,8 +35,18 @@ export const CRTShader = {
     uniform float cyanTint;
     uniform float colorBleeding;
     uniform float bleedingIntensity;
+    uniform float bloomIntensity;
+    uniform float bloomThreshold;
+    uniform float bloomRadius;
+    uniform float brightness;
+    uniform float gamma;
     
     varying vec2 vUv;
+    
+    // Bloom sampling function
+    vec3 sampleBloom(vec2 uv, vec2 offset) {
+      return texture2D(tDiffuse, uv + offset).rgb;
+    }
     
     void main() {
       // Apply screen curvature
@@ -68,9 +83,35 @@ export const CRTShader = {
       );
       
       // Mix original color with bleeding color based on brightness
-      float brightness = (color.r + color.g + color.b) / 3.0;
-      float bleedingMix = brightness * bleedingIntensity;
+      float brightness_old = (color.r + color.g + color.b) / 3.0;
+      float bleedingMix = brightness_old * bleedingIntensity;
       color.rgb = mix(color.rgb, bleedingColor, bleedingMix);
+      
+      // Apply bloom effect
+      vec3 bloom = vec3(0.0);
+      float totalWeight = 0.0;
+      
+      // Sample in a circular pattern around the current pixel
+      for (float angle = 0.0; angle < 6.28318; angle += 0.785398) { // 8 samples
+        for (float radius = 1.0; radius <= bloomRadius; radius += 1.0) {
+          vec2 offset = vec2(cos(angle), sin(angle)) * radius / resolution;
+          vec3 bloomSample = sampleBloom(uv, offset);
+          
+          // Only bloom bright areas
+          float sampleBrightness = (bloomSample.r + bloomSample.g + bloomSample.b) / 3.0;
+          if (sampleBrightness > bloomThreshold) {
+            float weight = 1.0 / radius; // Fade with distance
+            bloom += bloomSample * weight;
+            totalWeight += weight;
+          }
+        }
+      }
+      
+      // Normalize and apply bloom
+      if (totalWeight > 0.0) {
+        bloom /= totalWeight;
+        color.rgb += bloom * bloomIntensity;
+      }
       
       // Add scanlines (more obvious)
       float scanline = sin(uv.y * resolution.y * 2.0) * 0.5 + 0.5;
@@ -80,6 +121,9 @@ export const CRTShader = {
       // Add vignette (more obvious)
       float vignetteEffect = 1.0 - length(uv - 0.5) * vignette;
       color.rgb *= vignetteEffect;
+      
+      // Apply brightness and gamma correction
+      color.rgb = pow(color.rgb * brightness, vec3(1.0 / gamma));
       
       // Add cyan tint (adjustable)
       color.rgb += vec3(0.0, cyanTint, cyanTint);
