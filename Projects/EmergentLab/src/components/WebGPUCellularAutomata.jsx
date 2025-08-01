@@ -864,13 +864,24 @@ export default function WebGPUCellularAutomata() {
         varying float vState;
         
         void main() {
-          // Color based on cell position and state
+          // Warm arcade color scheme
+          float intensity = vState;
+          
+          // Create warm orange/yellow colors for active cells
+          // Inactive cells are dark blue/black
+          vec3 warmColor = vec3(1.0, 0.6, 0.2); // Orange
+          vec3 darkColor = vec3(0.0, 0.1, 0.3); // Dark blue
+          
+          // Mix warm and dark colors based on cell state
+          vec3 finalColor = mix(darkColor, warmColor, intensity);
+          
+          // Add some variation based on cell position for visual interest
           vec2 grid = vec2(${GRID_SIZE}.0, ${GRID_SIZE}.0);
           vec2 c = vCell / grid;
+          float variation = sin(c.x * 10.0) * sin(c.y * 10.0) * 0.1;
+          finalColor += vec3(variation * intensity);
           
-          // Use state value to determine color intensity
-          float intensity = vState;
-          gl_FragColor = vec4(c * intensity, 1.0 - c.x * intensity, 1.0);
+          gl_FragColor = vec4(finalColor, 1.0);
         }
       `,
       transparent: true,
