@@ -2,7 +2,6 @@ import React from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Leva } from 'leva'
-import WebGPUCellularAutomata from './components/WebGPUCellularAutomata'
 import PostProcessing from './components/PostProcessing'
 
 function App() {
@@ -20,9 +19,7 @@ function App() {
           minDistance={0.5}
           maxDistance={20}
         />
-        <PostProcessing>
-          <WebGPUCellularAutomata />
-        </PostProcessing>
+        <PostProcessing />
       </Canvas>
     </div>
   )

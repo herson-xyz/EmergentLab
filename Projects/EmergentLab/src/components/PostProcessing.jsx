@@ -1,15 +1,18 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useControls } from 'leva'
+import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { CRTShader } from '../shaders/CRTShader'
+import GridRenderTarget from './GridRenderTarget'
 
 export default function PostProcessing({ children }) {
   const { gl, scene, camera, size } = useThree()
   const composerRef = useRef()
   const crtPassRef = useRef()
+  const [gridTexture, setGridTexture] = useState(null)
 
   // Add Leva controls for CRT parameters
   const crtParams = useControls('CRT Effects', {
@@ -27,6 +30,11 @@ export default function PostProcessing({ children }) {
     gamma: { value: 1.0, min: 0.5, max: 1.5, step: 0.1, label: 'Gamma' }
   })
 
+  // Handle grid texture from render target
+  const handleGridTextureReady = (texture) => {
+    setGridTexture(texture)
+  }
+
   // Initialize EffectComposer
   useEffect(() => {
     if (!gl || !scene || !camera) return
@@ -34,8 +42,21 @@ export default function PostProcessing({ children }) {
     // Create EffectComposer
     const composer = new EffectComposer(gl)
     
-    // Create render pass (renders the scene normally)
-    const renderPass = new RenderPass(scene, camera)
+    // Create a simple scene for post-processing
+    const postProcessScene = new THREE.Scene()
+    const postProcessCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    
+    // Create a full-screen quad to display the grid texture
+    const geometry = new THREE.PlaneGeometry(2, 2)
+    const material = new THREE.MeshBasicMaterial({ 
+      map: gridTexture,
+      transparent: true 
+    })
+    const quad = new THREE.Mesh(geometry, material)
+    postProcessScene.add(quad)
+    
+    // Create render pass with our custom scene
+    const renderPass = new RenderPass(postProcessScene, postProcessCamera)
     composer.addPass(renderPass)
     
     // Create CRT shader pass
@@ -49,11 +70,22 @@ export default function PostProcessing({ children }) {
     return () => {
       composer.dispose()
     }
-  }, [gl, scene, camera, size])
+  }, [gl, scene, camera, size, gridTexture])
+
+  // Update material when texture changes
+  useEffect(() => {
+    if (composerRef.current && gridTexture) {
+      const postProcessScene = composerRef.current.passes[0].scene
+      if (postProcessScene.children[0]) {
+        postProcessScene.children[0].material.map = gridTexture
+        postProcessScene.children[0].material.needsUpdate = true
+      }
+    }
+  }, [gridTexture])
 
   // Override the default renderer with our composer
   useFrame((state) => {
-    if (composerRef.current && crtPassRef.current) {
+    if (composerRef.current && crtPassRef.current && gridTexture) {
       // Update time uniform for animations
       crtPassRef.current.uniforms.time.value = state.clock.elapsedTime
       
@@ -88,5 +120,11 @@ export default function PostProcessing({ children }) {
     }
   }, [size])
 
-  return <>{children}</>
+  return (
+    <>
+      {/* Render grid to target (hidden) */}
+      <GridRenderTarget onTextureReady={handleGridTextureReady} />
+      {children}
+    </>
+  )
 } 
