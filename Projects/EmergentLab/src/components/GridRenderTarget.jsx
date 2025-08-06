@@ -4,8 +4,20 @@ import * as THREE from 'three'
 import WebGPUCellularAutomata from './WebGPUCellularAutomata'
 
 export default function GridRenderTarget({ onTextureReady }) {
-  const { gl, scene, camera, size } = useThree()
+  const { gl, scene, size } = useThree()
   const renderTargetRef = useRef()
+
+  // Create dedicated orthographic camera for grid rendering
+  const gridCamera = useMemo(() => {
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    // Force square aspect ratio with zoom (smaller frustum = more zoom)
+    camera.left = -0.2
+    camera.right = 0.2
+    camera.top = 0.2
+    camera.bottom = -0.2
+    camera.updateProjectionMatrix()
+    return camera
+  }, [])
 
   // Create render target with fixed 512x512 resolution to match grid
   const renderTarget = useMemo(() => {
@@ -35,8 +47,8 @@ export default function GridRenderTarget({ onTextureReady }) {
       gl.setClearColor(0x000000, 1)
       gl.clear()
       
-      // Render the grid
-      gl.render(scene, camera)
+      // Render the grid using dedicated orthographic camera
+      gl.render(scene, gridCamera)
       
       // Restore original render target
       gl.setRenderTarget(currentRenderTarget)

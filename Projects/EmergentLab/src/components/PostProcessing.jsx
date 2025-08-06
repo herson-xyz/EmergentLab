@@ -55,6 +55,13 @@ export default function PostProcessing({ children }) {
     const postProcessScene = new THREE.Scene()
     const postProcessCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
     
+    // Force square aspect ratio regardless of window size
+    postProcessCamera.left = -1
+    postProcessCamera.right = 1
+    postProcessCamera.top = 1
+    postProcessCamera.bottom = -1
+    postProcessCamera.updateProjectionMatrix()
+    
     // Create a square quad to display the processed texture
     const geometry = new THREE.PlaneGeometry(1, 1) // Square quad for square texture
     
@@ -221,6 +228,13 @@ export default function PostProcessing({ children }) {
       const tempScene = new THREE.Scene()
       const tempCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
       
+      // Force square aspect ratio for temp camera
+      tempCamera.left = -1
+      tempCamera.right = 1
+      tempCamera.top = 1
+      tempCamera.bottom = -1
+      tempCamera.updateProjectionMatrix()
+      
       // Create quad with grid texture
       const geometry = new THREE.PlaneGeometry(2, 2)
       const material = new THREE.MeshBasicMaterial({ 
@@ -242,6 +256,14 @@ export default function PostProcessing({ children }) {
   // Update CRT uniforms and render
   useFrame((state) => {
     if (composerRef.current && gridTexture) {
+      // Calculate square viewport
+      const squareSize = Math.min(size.width, size.height)
+      const offsetX = (size.width - squareSize) / 2
+      const offsetY = (size.height - squareSize) / 2
+      
+      // Set viewport to maintain square aspect ratio
+      gl.setViewport(offsetX, offsetY, squareSize, squareSize)
+      
       // Update CRT uniforms if material exists
       const postProcessScene = composerRef.current.passes[0].scene
       if (postProcessScene.children[0] && postProcessScene.children[0].material) {
@@ -265,6 +287,10 @@ export default function PostProcessing({ children }) {
       
       // Render the final scene
       composerRef.current.render()
+      
+      // Reset viewport to full screen
+      gl.setViewport(0, 0, size.width, size.height)
+      
       return false // Prevent R3F from rendering again
     }
   }, 1) // Priority 1 to run after other useFrame calls
@@ -273,6 +299,8 @@ export default function PostProcessing({ children }) {
   useEffect(() => {
     if (composerRef.current) {
       composerRef.current.setSize(size.width, size.height)
+      
+      // Update resolution uniform for CRT effects
       if (crtPassRef.current) {
         crtPassRef.current.uniforms.resolution.value = [size.width, size.height]
       }
