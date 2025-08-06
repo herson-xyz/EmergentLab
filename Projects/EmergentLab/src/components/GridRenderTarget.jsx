@@ -7,11 +7,11 @@ export default function GridRenderTarget({ onTextureReady }) {
   const { gl, scene, camera, size } = useThree()
   const renderTargetRef = useRef()
 
-  // Create render target
+  // Create render target with fixed 512x512 resolution to match grid
   const renderTarget = useMemo(() => {
     const target = new THREE.WebGLRenderTarget(
-      size.width,
-      size.height,
+      512,  // Match grid resolution
+      512,  // Match grid resolution
       {
         format: THREE.RGBAFormat,
         type: THREE.UnsignedByteType,
@@ -20,14 +20,7 @@ export default function GridRenderTarget({ onTextureReady }) {
     )
     renderTargetRef.current = target
     return target
-  }, [size.width, size.height])
-
-  // Update render target size on resize
-  useEffect(() => {
-    if (renderTargetRef.current) {
-      renderTargetRef.current.setSize(size.width, size.height)
-    }
-  }, [size])
+  }, []) // Fixed size, no dependencies
 
   // Render grid to target
   useFrame(() => {
