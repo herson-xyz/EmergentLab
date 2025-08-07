@@ -6,24 +6,13 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { CRTShader } from '../shaders/CRTShader'
-import GridRenderTarget from './GridRenderTarget'
 
-export default function PostProcessing({ children }) {
+export default function PostProcessing({ children, minimizedTexture }) {
   const { gl, scene, camera, size } = useThree()
   const composerRef = useRef()
   const crtPassRef = useRef()
-  const [gridTexture, setGridTexture] = useState(null)
   
-  // Create render target for the quad
-  const quadRenderTarget = useMemo(() => {
-    return new THREE.WebGLRenderTarget(512, 512, {
-      format: THREE.RGBAFormat,
-      type: THREE.UnsignedByteType,
-      generateMipmaps: false
-    })
-  }, [])
-
-  // Add Leva controls for CRT parameters
+  // Get CRT parameters from the global controls
   const crtParams = useControls('CRT Effects', {
     enabled: { value: true, label: 'Enable CRT' },
     curvature: { value: 0.3, min: 0, max: 1, step: 0.1, label: 'Screen Curvature' },
@@ -38,11 +27,6 @@ export default function PostProcessing({ children }) {
     brightness: { value: 1.4, min: 0.5, max: 2.0, step: 0.1, label: 'Brightness' },
     gamma: { value: 1.0, min: 0.5, max: 1.5, step: 0.1, label: 'Gamma' }
   })
-
-  // Handle grid texture from render target
-  const handleGridTextureReady = (texture) => {
-    setGridTexture(texture)
-  }
 
   // Initialize EffectComposer
   useEffect(() => {
@@ -62,13 +46,13 @@ export default function PostProcessing({ children }) {
     postProcessCamera.bottom = -1
     postProcessCamera.updateProjectionMatrix()
     
-    // Create a square quad to display the processed texture
-    const geometry = new THREE.PlaneGeometry(1, 1) // Square quad for square texture
+    // Create a curved quad to display the processed texture
+    const geometry = new THREE.PlaneGeometry(1, 1, 32, 32) // Higher resolution for curvature
     
     // Create material with CRT effects applied via custom shader
     const material = new THREE.ShaderMaterial({
       uniforms: {
-        tDiffuse: { value: quadRenderTarget.texture },
+        tDiffuse: { value: null },
         time: { value: 0 },
         resolution: { value: [512, 512] },
         curvature: { value: crtParams.curvature },
@@ -86,9 +70,22 @@ export default function PostProcessing({ children }) {
       },
       vertexShader: `
         varying vec2 vUv;
+        uniform float curvature;
+        
         void main() {
           vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          
+          // Apply curvature to the vertex position
+          vec3 pos = position;
+          vec2 uv_centered = uv - 0.5;
+          float curve = curvature * 0.1; // Scale curvature for geometry
+          
+          // Apply pincushion distortion (inverted barrel) to vertex position
+          float dist = length(uv_centered);
+          float factor = 1.0 - dist * dist * curve; // Inverted: subtract instead of add
+          pos.xy *= factor;
+          
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
         }
       `,
       fragmentShader: `
@@ -117,15 +114,13 @@ export default function PostProcessing({ children }) {
         
         void main() {
           if (enabled < 0.5) {
-            // No CRT effects
+            // No CRT effects - just display the texture
             gl_FragColor = texture2D(tDiffuse, vUv);
             return;
           }
           
-          // Apply screen curvature
-          vec2 uv = vUv - 0.5;
-          uv *= 1.0 + uv.yx * uv.yx * curvature;
-          uv += 0.5;
+          // Use UV coordinates directly since curvature is applied to geometry
+          vec2 uv = vUv;
           
           // Discard pixels outside the curved screen
           if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
@@ -219,51 +214,11 @@ export default function PostProcessing({ children }) {
     return () => {
       composer.dispose()
     }
-  }, [gl, scene, camera, quadRenderTarget.texture])
-
-  // Render quad to target and apply CRT effects
-  useFrame(() => {
-    if (gridTexture && quadRenderTarget) {
-      // Create a temporary scene for the quad
-      const tempScene = new THREE.Scene()
-      const tempCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
-      
-      // Force square aspect ratio for temp camera
-      tempCamera.left = -1
-      tempCamera.right = 1
-      tempCamera.top = 1
-      tempCamera.bottom = -1
-      tempCamera.updateProjectionMatrix()
-      
-      // Create quad with grid texture
-      const geometry = new THREE.PlaneGeometry(2, 2)
-      const material = new THREE.MeshBasicMaterial({ 
-        map: gridTexture,
-        transparent: true 
-      })
-      const quad = new THREE.Mesh(geometry, material)
-      tempScene.add(quad)
-      
-      // Render to quad target
-      gl.setRenderTarget(quadRenderTarget)
-      gl.setClearColor(0x000000, 1)
-      gl.clear()
-      gl.render(tempScene, tempCamera)
-      gl.setRenderTarget(null)
-    }
-  })
+  }, [gl, scene, camera])
 
   // Update CRT uniforms and render
   useFrame((state) => {
-    if (composerRef.current && gridTexture) {
-      // Calculate square viewport
-      const squareSize = Math.min(size.width, size.height)
-      const offsetX = (size.width - squareSize) / 2
-      const offsetY = (size.height - squareSize) / 2
-      
-      // Set viewport to maintain square aspect ratio
-      gl.setViewport(offsetX, offsetY, squareSize, squareSize)
-      
+    if (composerRef.current && minimizedTexture) {
       // Update CRT uniforms if material exists
       const postProcessScene = composerRef.current.passes[0].scene
       if (postProcessScene.children[0] && postProcessScene.children[0].material) {
@@ -282,10 +237,24 @@ export default function PostProcessing({ children }) {
           material.uniforms.gamma.value = crtParams.gamma
           material.uniforms.enabled.value = crtParams.enabled ? 1.0 : 0.0
           material.uniforms.time.value = state.clock.elapsedTime
+          
+          // Update the texture for CRT effects
+          material.uniforms.tDiffuse.value = minimizedTexture
+          
+          // Force material update to apply vertex shader changes
+          material.needsUpdate = true
         }
       }
       
-      // Render the final scene
+      // Calculate square viewport for minimized mode
+      const squareSize = Math.min(size.width, size.height)
+      const offsetX = (size.width - squareSize) / 2
+      const offsetY = (size.height - squareSize) / 2
+      
+      // Set viewport to maintain square aspect ratio
+      gl.setViewport(offsetX, offsetY, squareSize, squareSize)
+      
+      // Render the final scene with CRT effects
       composerRef.current.render()
       
       // Reset viewport to full screen
@@ -293,6 +262,7 @@ export default function PostProcessing({ children }) {
       
       return false // Prevent R3F from rendering again
     }
+    // In fullscreen mode, don't interfere with R3F's normal rendering
   }, 1) // Priority 1 to run after other useFrame calls
 
   // Handle resize
@@ -309,8 +279,6 @@ export default function PostProcessing({ children }) {
 
   return (
     <>
-      {/* Render grid to target (hidden) */}
-      <GridRenderTarget onTextureReady={handleGridTextureReady} />
       {children}
     </>
   )
