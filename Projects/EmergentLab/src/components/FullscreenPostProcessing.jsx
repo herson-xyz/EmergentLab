@@ -1,18 +1,15 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react'
+import React, { useRef, useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useControls } from 'leva'
 import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
-import { CRTShader } from '../shaders/CRTShader'
 
-export default function PostProcessing({ children, minimizedTexture }) {
-  const { gl, scene, camera, size } = useThree()
+export default function FullscreenPostProcessing({ texture }) {
+  const { gl, size } = useThree()
   const composerRef = useRef()
-  const crtPassRef = useRef()
   
-  // Get CRT parameters from the global controls
+  // CRT parameters scaled for fullscreen
   const crtParams = useControls('CRT Effects', {
     enabled: { value: true, label: 'Enable CRT' },
     curvature: { value: 0.3, min: 0, max: 1, step: 0.1, label: 'Screen Curvature' },
@@ -30,7 +27,9 @@ export default function PostProcessing({ children, minimizedTexture }) {
 
   // Initialize EffectComposer
   useEffect(() => {
-    if (!gl || !scene || !camera) return
+    if (!gl) return
+
+    console.log('FullscreenPostProcessing: Creating EffectComposer');
 
     // Create EffectComposer
     const composer = new EffectComposer(gl)
@@ -39,22 +38,23 @@ export default function PostProcessing({ children, minimizedTexture }) {
     const postProcessScene = new THREE.Scene()
     const postProcessCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
     
-    // Force square aspect ratio regardless of window size
-    postProcessCamera.left = -1
-    postProcessCamera.right = 1
+    // Use fullscreen aspect ratio
+    const aspect = size.width / size.height
+    postProcessCamera.left = -aspect
+    postProcessCamera.right = aspect
     postProcessCamera.top = 1
     postProcessCamera.bottom = -1
     postProcessCamera.updateProjectionMatrix()
     
-    // Create a curved quad to display the processed texture
-    const geometry = new THREE.PlaneGeometry(1, 1, 32, 32) // Higher resolution for curvature
+    // Create a quad that matches the fullscreen aspect ratio
+    const geometry = new THREE.PlaneGeometry(2 * aspect, 2, 32, 32)
     
-    // Create material with CRT effects applied via custom shader
+    // Create material with CRT effects scaled for fullscreen
     const material = new THREE.ShaderMaterial({
       uniforms: {
         tDiffuse: { value: null },
         time: { value: 0 },
-        resolution: { value: [512, 512] },
+        resolution: { value: [size.width, size.height] },
         curvature: { value: crtParams.curvature },
         scanlines: { value: crtParams.scanlines },
         vignette: { value: crtParams.vignette },
@@ -75,14 +75,14 @@ export default function PostProcessing({ children, minimizedTexture }) {
         void main() {
           vUv = uv;
           
-          // Apply curvature to the vertex position
+          // Apply curvature to the vertex position (scaled for fullscreen)
           vec3 pos = position;
           vec2 uv_centered = uv - 0.5;
-          float curve = curvature * 0.1; // Scale curvature for geometry
+          float curve = curvature * 0.05; // Reduced curvature for fullscreen
           
-          // Apply pincushion distortion (inverted barrel) to vertex position
+          // Apply pincushion distortion to vertex position
           float dist = length(uv_centered);
-          float factor = 1.0 - dist * dist * curve; // Inverted: subtract instead of add
+          float factor = 1.0 - dist * dist * curve;
           pos.xy *= factor;
           
           gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
@@ -181,13 +181,13 @@ export default function PostProcessing({ children, minimizedTexture }) {
             color.rgb += bloom * bloomIntensity;
           }
           
-          // Add scanlines (more obvious)
-          float scanline = sin(uv.y * resolution.y * 2.0) * 0.5 + 0.5;
+          // Add scanlines (scaled for fullscreen)
+          float scanline = sin(uv.y * resolution.y * 1.5) * 0.5 + 0.5; // Reduced frequency
           scanline = 1.0 - (1.0 - scanline) * scanlines;
           color.rgb *= scanline;
           
-          // Add vignette (more obvious)
-          float vignetteEffect = 1.0 - length(uv - 0.5) * vignette;
+          // Add vignette (scaled for fullscreen)
+          float vignetteEffect = 1.0 - length(uv - 0.5) * vignette * 0.8; // Reduced intensity
           color.rgb *= vignetteEffect;
           
           // Apply brightness and gamma correction
@@ -214,12 +214,61 @@ export default function PostProcessing({ children, minimizedTexture }) {
     return () => {
       composer.dispose()
     }
-  }, [gl, scene, camera])
+  }, [gl, size.width, size.height])
 
   // Update CRT uniforms and render
   useFrame((state) => {
-    if (composerRef.current && minimizedTexture) {
+    if (composerRef.current && texture) {
       // Update CRT uniforms if material exists
+      const postProcessScene = composerRef.current.passes[0].scene
+      if (postProcessScene.children[0] && postProcessScene.children[0].material) {
+        const material = postProcessScene.children[0].material
+        if (material.uniforms) {
+          // Update all CRT uniforms with current values
+          material.uniforms.curvature.value = crtParams.curvature
+          material.uniforms.scanlines.value = crtParams.scanlines
+          material.uniforms.vignette.value = crtParams.vignette
+          material.uniforms.cyanTint.value = crtParams.cyanTint
+          material.uniforms.colorBleeding.value = crtParams.colorBleeding
+          material.uniforms.bleedingIntensity.value = crtParams.bleedingIntensity
+          material.uniforms.bloomIntensity.value = crtParams.bloomIntensity
+          material.uniforms.bloomThreshold.value = crtParams.bloomThreshold
+          material.uniforms.bloomRadius.value = crtParams.bloomRadius
+          material.uniforms.brightness.value = crtParams.brightness
+          material.uniforms.gamma.value = crtParams.gamma
+          material.uniforms.enabled.value = crtParams.enabled ? 1.0 : 0.0
+          material.uniforms.time.value = state.clock.elapsedTime
+          
+          // Update the texture for CRT effects
+          material.uniforms.tDiffuse.value = texture
+          
+          // Force material update to apply changes
+          material.needsUpdate = true
+          
+          console.log('FullscreenPostProcessing: Updated uniforms with curvature:', crtParams.curvature);
+        }
+      }
+      
+      // Full viewport for fullscreen mode
+      gl.setViewport(0, 0, size.width, size.height)
+      
+      // Render the final scene with CRT effects
+      composerRef.current.render()
+      
+      return false // Prevent R3F from rendering again
+    }
+  }, 1) // Priority 1 to run after other useFrame calls
+
+  // Handle resize
+  useEffect(() => {
+    if (composerRef.current) {
+      composerRef.current.setSize(size.width, size.height)
+    }
+  }, [size])
+
+  // Update uniforms when CRT params change
+  useEffect(() => {
+    if (composerRef.current) {
       const postProcessScene = composerRef.current.passes[0].scene
       if (postProcessScene.children[0] && postProcessScene.children[0].material) {
         const material = postProcessScene.children[0].material
@@ -236,50 +285,12 @@ export default function PostProcessing({ children, minimizedTexture }) {
           material.uniforms.brightness.value = crtParams.brightness
           material.uniforms.gamma.value = crtParams.gamma
           material.uniforms.enabled.value = crtParams.enabled ? 1.0 : 0.0
-          material.uniforms.time.value = state.clock.elapsedTime
-          
-          // Update the texture for CRT effects
-          material.uniforms.tDiffuse.value = minimizedTexture
-          
-          // Force material update to apply vertex shader changes
           material.needsUpdate = true
+          console.log('FullscreenPostProcessing: CRT params changed, updated uniforms');
         }
       }
-      
-      // Calculate square viewport for minimized mode
-      const squareSize = Math.min(size.width, size.height)
-      const offsetX = (size.width - squareSize) / 2
-      const offsetY = (size.height - squareSize) / 2
-      
-      // Set viewport to maintain square aspect ratio
-      gl.setViewport(offsetX, offsetY, squareSize, squareSize)
-      
-      // Render the final scene with CRT effects
-      composerRef.current.render()
-      
-      // Reset viewport to full screen
-      gl.setViewport(0, 0, size.width, size.height)
-      
-      return false // Prevent R3F from rendering again
     }
-    // In fullscreen mode, don't interfere with R3F's normal rendering
-  }, 1) // Priority 1 to run after other useFrame calls
+  }, [crtParams])
 
-  // Handle resize
-  useEffect(() => {
-    if (composerRef.current) {
-      composerRef.current.setSize(size.width, size.height)
-      
-      // Update resolution uniform for CRT effects
-      if (crtPassRef.current) {
-        crtPassRef.current.uniforms.resolution.value = [size.width, size.height]
-      }
-    }
-  }, [size])
-
-  return (
-    <>
-      {children}
-    </>
-  )
+  return null
 } 

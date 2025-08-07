@@ -28,7 +28,7 @@ export default function SimulationParameters() {
         d2: { value: 0.47, min: 0.0, max: 1.0, step: 0.001 },
         dt: { value: 0.03, min: 0.01, max: 1.0, step: 0.01 },
         steepness: { value: 0.001, min: 0.0001, max: 0.01, step: 0.0001 }
-      }, { collapsed: false }) // 👈 expanded by default for easy access
+      }, { collapsed: true }) // 👈 expanded by default for easy access
     })
   })
   

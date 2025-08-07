@@ -1,16 +1,18 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { OrbitControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import PostProcessing from './PostProcessing'
-import OffscreenRenderTargetManager from './OffscreenRenderTargetManager'
-import OffscreenDisplayAsQuad from './OffscreenDisplayAsQuad'
+import FullscreenPostProcessing from './FullscreenPostProcessing'
+import MinimizedPostProcessing from './MinimizedPostProcessing'
+import FullscreenRenderTargetManager from './FullscreenRenderTargetManager'
+import MinimizedRenderTargetManager from './MinimizedRenderTargetManager'
 import WebGPUCellularAutomata from './WebGPUCellularAutomata'
-import CRTControls from './CRTControls'
 
 export default function MainScene() {
   const { camera } = useThree();
-  const renderTargetRef = useRef();
-  const [texture, setTexture] = useState();
+  const fullscreenRenderTargetRef = useRef();
+  const minimizedRenderTargetRef = useRef();
+  const [fullscreenTexture, setFullscreenTexture] = useState();
+  const [minimizedTexture, setMinimizedTexture] = useState();
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Keyboard event listener for Cmd+F (or Ctrl+F)
@@ -29,9 +31,6 @@ export default function MainScene() {
   
   return (
     <>
-      {/* CRT Controls - always visible */}
-      <CRTControls />
-      
       {/* OrbitControls only in fullscreen mode */}
       {isFullscreen && (
         <OrbitControls 
@@ -44,8 +43,26 @@ export default function MainScene() {
       
       <ambientLight intensity={2} />
       <WebGPUCellularAutomata />
-      <OffscreenRenderTargetManager renderTargetRef={renderTargetRef} setTexture={setTexture} isFullscreen={isFullscreen} />
-      {!isFullscreen && texture && <PostProcessing minimizedTexture={texture} />}
+      
+      {/* Fullscreen render path */}
+      <FullscreenRenderTargetManager 
+        renderTargetRef={fullscreenRenderTargetRef}
+        setTexture={setFullscreenTexture}
+        isFullscreen={isFullscreen}
+      />
+      
+      {/* Minimized render path */}
+      <MinimizedRenderTargetManager 
+        renderTargetRef={minimizedRenderTargetRef}
+        setTexture={setMinimizedTexture}
+        isFullscreen={isFullscreen}
+      />
+      
+      {/* Fullscreen PostProcessing */}
+      {isFullscreen && fullscreenTexture && <FullscreenPostProcessing texture={fullscreenTexture} />}
+      
+      {/* Minimized PostProcessing */}
+      {!isFullscreen && minimizedTexture && <MinimizedPostProcessing texture={minimizedTexture} />}
     </>
   );
 } 
