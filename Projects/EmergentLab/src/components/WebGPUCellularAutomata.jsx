@@ -937,12 +937,6 @@ export default function WebGPUCellularAutomata() {
       readBuffer.mapAsync(GPUMapMode.READ).then(() => {
         const newStates = new Float32Array(readBuffer.getMappedRange())
         
-        // Debug: for SmoothLife v1, check if parameter values are being used
-        if (simulationType === 'smoothLifeV1') {
-          console.log('SmoothLife v1 debug - First 4 values (should be parameters):', newStates.slice(0, 4))
-        }
-
-        
         // Copy the data before unmapping to avoid detached ArrayBuffer
         const copiedStates = new Float32Array(newStates)
         

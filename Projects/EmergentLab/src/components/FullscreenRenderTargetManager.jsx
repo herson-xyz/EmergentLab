@@ -2,12 +2,11 @@ import { useEffect, useRef, useMemo } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-export default function FullscreenRenderTargetManager({ renderTargetRef, setTexture, isFullscreen }) {
+export default function FullscreenRenderTargetManager({ renderTargetRef, setTexture, isFullscreen, offscreenScene, offscreenCamera }) {
   const { scene, camera, gl, size } = useThree();
 
   // Create dynamic render target that matches window size
   const renderTarget = useMemo(() => {
-    console.log('Creating fullscreen render target:', size.width, 'x', size.height);
     return new THREE.WebGLRenderTarget(size.width, size.height, {
       type: THREE.HalfFloatType,
       format: THREE.RGBAFormat,
@@ -23,8 +22,6 @@ export default function FullscreenRenderTargetManager({ renderTargetRef, setText
     renderTargetRef.current = renderTarget;
     if (setTexture) setTexture(renderTarget.texture);
     
-    console.log('FullscreenRenderTargetManager: Render target created');
-    
     // Clean up on unmount
     return () => {
       if (renderTargetRef.current) {
@@ -37,10 +34,8 @@ export default function FullscreenRenderTargetManager({ renderTargetRef, setText
   useEffect(() => {
     if (!isFullscreen && setTexture) {
       setTexture(null);
-      console.log('FullscreenRenderTargetManager: Cleaned up texture for minimized mode');
     } else if (isFullscreen && renderTargetRef.current && setTexture) {
       setTexture(renderTargetRef.current.texture);
-      console.log('FullscreenRenderTargetManager: Restored texture for fullscreen mode');
     }
   }, [isFullscreen, setTexture, renderTargetRef]);
 
@@ -49,14 +44,34 @@ export default function FullscreenRenderTargetManager({ renderTargetRef, setText
     if (!isFullscreen || !renderTargetRef.current) {
       return;
     }
-    
-    console.log('FullscreenRenderTargetManager: Rendering to fullscreen target');
-    
-    // Use main camera (respects user controls)
+
+    // Choose scene and camera
+    const srcScene = offscreenScene?.current || scene;
+    const srcCamera = offscreenCamera?.current || camera;
+
+    // If using an offscreen camera, mirror the main camera pose/projection so OrbitControls apply
+    if (offscreenCamera?.current) {
+      const dst = offscreenCamera.current;
+      const src = camera;
+
+      // Pose
+      dst.position.copy(src.position);
+      dst.quaternion.copy(src.quaternion);
+
+      // Projection
+      dst.fov = src.fov;
+      dst.near = src.near;
+      dst.far = src.far;
+      dst.aspect = Math.max(1e-6, size.width / size.height);
+      dst.updateProjectionMatrix();
+      dst.updateMatrixWorld();
+    }
+
+    // Use chosen camera/scene
     gl.setRenderTarget(renderTargetRef.current);
     gl.setClearColor(0x000000);
     gl.clear();
-    gl.render(scene, camera); // Main camera with OrbitControls
+    gl.render(srcScene, srcCamera);
     gl.setRenderTarget(null);
     gl.setClearColor(0x000000);
   });

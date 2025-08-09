@@ -29,8 +29,6 @@ export default function FullscreenPostProcessing({ texture }) {
   useEffect(() => {
     if (!gl) return
 
-    console.log('FullscreenPostProcessing: Creating EffectComposer');
-
     // Create EffectComposer
     const composer = new EffectComposer(gl)
     
@@ -244,8 +242,6 @@ export default function FullscreenPostProcessing({ texture }) {
           
           // Force material update to apply changes
           material.needsUpdate = true
-          
-          console.log('FullscreenPostProcessing: Updated uniforms with curvature:', crtParams.curvature);
         }
       }
       
@@ -286,7 +282,6 @@ export default function FullscreenPostProcessing({ texture }) {
           material.uniforms.gamma.value = crtParams.gamma
           material.uniforms.enabled.value = crtParams.enabled ? 1.0 : 0.0
           material.needsUpdate = true
-          console.log('FullscreenPostProcessing: CRT params changed, updated uniforms');
         }
       }
     }

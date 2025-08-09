@@ -1,0 +1,1 @@
+export const USE_OFFSCREEN_SIM = true; 

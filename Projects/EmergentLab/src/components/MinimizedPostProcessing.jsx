@@ -29,8 +29,6 @@ export default function MinimizedPostProcessing({ texture }) {
   useEffect(() => {
     if (!gl) return
 
-    console.log('MinimizedPostProcessing: Creating EffectComposer');
-
     // Create EffectComposer
     const composer = new EffectComposer(gl)
     
@@ -243,8 +241,6 @@ export default function MinimizedPostProcessing({ texture }) {
           
           // Force material update to apply changes
           material.needsUpdate = true
-          
-          console.log('MinimizedPostProcessing: Updated uniforms with curvature:', crtParams.curvature);
         }
       }
       
@@ -288,7 +284,6 @@ export default function MinimizedPostProcessing({ texture }) {
           material.uniforms.gamma.value = crtParams.gamma
           material.uniforms.enabled.value = crtParams.enabled ? 1.0 : 0.0
           material.needsUpdate = true
-          console.log('MinimizedPostProcessing: CRT params changed, updated uniforms');
         }
       }
     }
