@@ -1,0 +1,11 @@
+Model Information:
+* title:	Retro TV
+* source:	https://sketchfab.com/3d-models/retro-tv-761751dc61d34ecc86617458c51c5b97
+* author:	Alana G (https://sketchfab.com/alanaguidry05)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Retro TV" (https://sketchfab.com/3d-models/retro-tv-761751dc61d34ecc86617458c51c5b97) by Alana G (https://sketchfab.com/alanaguidry05) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
