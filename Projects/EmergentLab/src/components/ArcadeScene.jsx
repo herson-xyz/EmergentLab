@@ -1,9 +1,10 @@
 import React, { useRef, useEffect, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { useGLTF, Center } from '@react-three/drei'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useGLTF, Center, MeshReflectorMaterial } from '@react-three/drei'
 import { useControls } from 'leva'
 import * as THREE from 'three'
 import ArcadeScreenMesh from './ArcadeScreenMesh'
+import ArcadeBloom from './ArcadeBloom'
 
 export default function ArcadeScene({ texture, enabled }) {
   const modelUrl = new URL('../models/retro_tv/scene.gltf', import.meta.url).href
@@ -12,6 +13,8 @@ export default function ArcadeScene({ texture, enabled }) {
   const tvRef = useRef()
   const screenMeshRef = useRef(null)
   const crtMatRef = useRef(null)
+  const { scene } = useThree()
+  const redDirRef = useRef()
 
   // Separate Leva folder for the TV CRT parameters
   const crtTV = useControls('CRT (TV)', {
@@ -25,6 +28,58 @@ export default function ArcadeScene({ texture, enabled }) {
     brightness: { value: 1.0, min: 0.2, max: 2.0, step: 0.05 },
     gamma: { value: 1.0, min: 0.5, max: 2.0, step: 0.05 },
   })
+
+  // Fog controls for Arcade scene
+  const fogCtl = useControls('Fog (Arcade)', {
+    enabled: { value: true },
+    color: { value: '#0a0a0a' },
+    near: { value: 2, min: 0, max: 50, step: 0.1 },
+    far: { value: 18, min: 1, max: 200, step: 0.5 },
+  })
+
+  // Bloom controls
+  const bloomCtl = useControls('Bloom (Arcade)', {
+    enabled: { value: true },
+    strength: { value: 1.0, min: 0, max: 3, step: 0.05 },
+    radius: { value: 0.8, min: 0, max: 1.5, step: 0.05 },
+    threshold: { value: 0.8, min: 0, max: 1, step: 0.01 },
+    tvEmissive: { value: '#aa66ff' },
+    tvEmissiveIntensity: { value: 2.5, min: 0, max: 6, step: 0.1 },
+  })
+
+  // Apply/cleanup fog on the root scene when Arcade is active
+  useEffect(() => {
+    if (enabled && fogCtl.enabled) {
+      scene.fog = new THREE.Fog(new THREE.Color(fogCtl.color), fogCtl.near, fogCtl.far)
+    } else {
+      if (scene.fog) scene.fog = null
+    }
+    return () => {
+      if (scene.fog) scene.fog = null
+    }
+  }, [enabled, fogCtl.enabled, fogCtl.color, fogCtl.near, fogCtl.far, scene])
+
+  // Point the red directional light at the target
+  useEffect(() => {
+    if (!redDirRef.current) return
+    redDirRef.current.target.position.set(0, 0, -9)
+    redDirRef.current.target.updateMatrixWorld()
+  }, [])
+
+  // Ensure TV meshes cast shadows and set emissive to drive bloom
+  useEffect(() => {
+    if (!gltf.scene) return
+    gltf.scene.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+        if (child.material && 'emissive' in child.material) {
+          child.material.emissive = new THREE.Color(bloomCtl.tvEmissive)
+          child.material.emissiveIntensity = bloomCtl.tvEmissiveIntensity
+        }
+      }
+    })
+  }, [gltf.scene, bloomCtl.tvEmissive, bloomCtl.tvEmissiveIntensity])
 
   // Locate the screen mesh by exact name, with heuristic fallback
   useEffect(() => {
@@ -51,11 +106,6 @@ export default function ArcadeScene({ texture, enabled }) {
     }
 
     screenMeshRef.current = candidate || null
-    if (candidate) {
-      console.log('[ArcadeScene] Using screen mesh:', candidate.name, candidate.material?.name)
-    } else {
-      console.warn('[ArcadeScene] Screen mesh NOT found (using heuristic failed)')
-    }
   }, [gltf.scene])
 
   // Create CRT ShaderMaterial (object-space) when texture and mesh are ready
@@ -185,29 +235,84 @@ export default function ArcadeScene({ texture, enabled }) {
 
   useFrame(() => {})
 
+  // Explicitly load provided concrete textures (albedo/diffuse, roughness, normal)
+  const albedoUrl = useMemo(() => new URL('../textures/concrete_floor_worn_001_diff_1k.png', import.meta.url).href, [])
+  const roughUrl = useMemo(() => new URL('../textures/concrete_floor_worn_001_rough_1k.png', import.meta.url).href, [])
+  const normalUrl = useMemo(() => new URL('../textures/concrete_floor_worn_001_nor_gl_1k.png', import.meta.url).href, [])
+
+  const albedoTex = useMemo(() => {
+    const t = new THREE.TextureLoader().load(albedoUrl)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.repeat.set(16, 16)
+    t.anisotropy = 8
+    t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }, [albedoUrl])
+
+  const roughTex = useMemo(() => {
+    const t = new THREE.TextureLoader().load(roughUrl)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.repeat.set(16, 16)
+    t.anisotropy = 8
+    t.colorSpace = THREE.NoColorSpace
+    return t
+  }, [roughUrl])
+
+  const normalTex = useMemo(() => {
+    const t = new THREE.TextureLoader().load(normalUrl)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.repeat.set(16, 16)
+    t.anisotropy = 8
+    t.colorSpace = THREE.NoColorSpace
+    return t
+  }, [normalUrl])
+
   // Fixed downscale to bring very large models into view; Center will rebase pivot to origin
   const s = 0.005
 
   return (
     <group position={[0, 0, 0]}>
-      {/* {enabled && texture ? (
-        <ArcadeScreenMesh texture={texture} />
-      ) : (
-        <mesh>
-          <boxGeometry args={[0.5, 0.3, 0.05]} />
-          <meshBasicMaterial color={'#222'} />
-        </mesh>
-      )} */}
-
       {enabled && (
         <>
           <hemisphereLight intensity={0.6} groundColor={0x111111} />
           <directionalLight position={[2, 3, 2]} intensity={1.5} />
+          {/* Red directional light targeting the origin */}
+          <directionalLight
+            ref={redDirRef}
+            color="#ff2222"
+            position={[1, 0, -8]}
+            intensity={90}
+            castShadow
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048}
+          />
+
+          {/* Reflective concrete floor with tiled detail */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]} receiveShadow>
+            <planeGeometry args={[50, 50]} />
+            <MeshReflectorMaterial
+              color="#ffffff"
+              map={albedoTex}
+              metalness={0.05}
+              roughness={0.9}
+              roughnessMap={roughTex}
+              normalMap={normalTex}
+              normalScale={[2.0, 2.0]}
+              blur={[150, 50]}
+              mixStrength={0.8}
+              mirror={0.15}
+              depthScale={0.01}
+              toneMapped
+            />
+          </mesh>
 
           {/* Auto-center the model at the origin and downscale */}
-          <Center position={[0, 0, -7]} rotation={[0, Math.PI / 2, 0]}>
+          <Center position={[0, 0.45, -9]} rotation={[0, Math.PI / 2, 0]}>
             <primitive ref={tvRef} object={gltf.scene} scale={[s, s, s]} />
           </Center>
+
+          {/* Global Bloom for Arcade scene */}
+          <ArcadeBloom enabled={bloomCtl.enabled} strength={bloomCtl.strength} radius={bloomCtl.radius} threshold={bloomCtl.threshold} />
         </>
       )}
     </group>

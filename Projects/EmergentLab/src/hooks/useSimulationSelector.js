@@ -9,7 +9,7 @@ export function useSimulationSelector() {
         'SmoothLife v0.5': 'smoothLifeV05',
         'SmoothLife v1': 'smoothLifeV1'
       },
-      value: 'gameOfLife'
+      value: 'smoothLifeV1'
     }
   })
 } 

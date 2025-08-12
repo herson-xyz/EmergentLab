@@ -63,7 +63,7 @@ export default function MinimizedRenderTargetManager({ renderTargetRef, setTextu
     gl.clear();
     gl.render(srcScene, srcCamera);
     gl.setRenderTarget(null);
-    gl.setClearColor(0xffffff);
+    gl.setClearColor(0x000000);
   });
 
   return null;
