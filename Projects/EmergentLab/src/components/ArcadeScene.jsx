@@ -4,7 +4,6 @@ import { useGLTF, Center, MeshReflectorMaterial } from '@react-three/drei'
 import { useControls } from 'leva'
 import * as THREE from 'three'
 import ArcadeScreenMesh from './ArcadeScreenMesh'
-import ArcadeBloom from './ArcadeBloom'
 
 export default function ArcadeScene({ texture, enabled }) {
   const modelUrl = new URL('../models/retro_tv/scene.gltf', import.meta.url).href
@@ -29,22 +28,19 @@ export default function ArcadeScene({ texture, enabled }) {
     gamma: { value: 1.0, min: 0.5, max: 2.0, step: 0.05 },
   })
 
+  // Bloom controls for the TV screen (local shader bloom)
+  const screenBloom = useControls('Bloom (Screen)', {
+    bloomIntensity: { value: 1.2, min: 0, max: 3, step: 0.05 },
+    bloomThreshold: { value: 0.0, min: 0, max: 1, step: 0.01 },
+    bloomRadius: { value: 2.0, min: 1, max: 10, step: 0.5 },
+  })
+
   // Fog controls for Arcade scene
   const fogCtl = useControls('Fog (Arcade)', {
     enabled: { value: true },
     color: { value: '#0a0a0a' },
     near: { value: 2, min: 0, max: 50, step: 0.1 },
     far: { value: 18, min: 1, max: 200, step: 0.5 },
-  })
-
-  // Bloom controls
-  const bloomCtl = useControls('Bloom (Arcade)', {
-    enabled: { value: true },
-    strength: { value: 1.0, min: 0, max: 3, step: 0.05 },
-    radius: { value: 0.8, min: 0, max: 1.5, step: 0.05 },
-    threshold: { value: 0.8, min: 0, max: 1, step: 0.01 },
-    tvEmissive: { value: '#aa66ff' },
-    tvEmissiveIntensity: { value: 2.5, min: 0, max: 6, step: 0.1 },
   })
 
   // Apply/cleanup fog on the root scene when Arcade is active
@@ -66,20 +62,16 @@ export default function ArcadeScene({ texture, enabled }) {
     redDirRef.current.target.updateMatrixWorld()
   }, [])
 
-  // Ensure TV meshes cast shadows and set emissive to drive bloom
+  // Ensure TV meshes cast/receive shadows (no emissive tweaks)
   useEffect(() => {
     if (!gltf.scene) return
     gltf.scene.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true
         child.receiveShadow = true
-        if (child.material && 'emissive' in child.material) {
-          child.material.emissive = new THREE.Color(bloomCtl.tvEmissive)
-          child.material.emissiveIntensity = bloomCtl.tvEmissiveIntensity
-        }
       }
     })
-  }, [gltf.scene, bloomCtl.tvEmissive, bloomCtl.tvEmissiveIntensity])
+  }, [gltf.scene])
 
   // Locate the screen mesh by exact name, with heuristic fallback
   useEffect(() => {
@@ -131,6 +123,9 @@ export default function ArcadeScene({ texture, enabled }) {
         cyanTint: { value: crtTV.cyanTint },
         colorBleeding: { value: crtTV.colorBleeding },
         bleedingIntensity: { value: crtTV.bleedingIntensity },
+        bloomIntensity: { value: screenBloom.bloomIntensity },
+        bloomThreshold: { value: screenBloom.bloomThreshold },
+        bloomRadius: { value: screenBloom.bloomRadius },
         brightness: { value: crtTV.brightness },
         gamma: { value: crtTV.gamma },
         enabled: { value: crtTV.enabled ? 1.0 : 0.0 },
@@ -158,6 +153,9 @@ export default function ArcadeScene({ texture, enabled }) {
         uniform float cyanTint;
         uniform float colorBleeding;
         uniform float bleedingIntensity;
+        uniform float bloomIntensity;
+        uniform float bloomThreshold;
+        uniform float bloomRadius;
         uniform float brightness;
         uniform float gamma;
         uniform float enabled;
@@ -186,6 +184,26 @@ export default function ArcadeScene({ texture, enabled }) {
           float bleedMixAmt = oldB * bleedingIntensity;
           vec3 color = mix(base.rgb, bleedMix, bleedMixAmt);
 
+          // Local bloom inside the screen
+          vec3 bloom = vec3(0.0);
+          float totalWeight = 0.0;
+          for (float angle = 0.0; angle < 6.28318; angle += 0.785398) {
+            for (float r = 1.0; r <= bloomRadius; r += 1.0) {
+              vec2 offset = vec2(cos(angle), sin(angle)) * r / resolution;
+              vec3 bloomSample = sampleBloom(uv, offset);
+              float sampleBrightness = (bloomSample.r + bloomSample.g + bloomSample.b) / 3.0;
+              if (sampleBrightness > bloomThreshold) {
+                float weight = 1.0 / r;
+                bloom += bloomSample * weight;
+                totalWeight += weight;
+              }
+            }
+          }
+          if (totalWeight > 0.0) {
+            bloom /= totalWeight;
+            color += bloom * bloomIntensity;
+          }
+
           // Scanlines
           float sl = sin(uv.y * resolution.y * 2.0) * 0.5 + 0.5;
           sl = 1.0 - (1.0 - sl) * scanlines;
@@ -195,8 +213,9 @@ export default function ArcadeScene({ texture, enabled }) {
           float vig = 1.0 - length(uv - 0.5) * vignette;
           color *= vig;
 
-          // Brightness
+          // Brightness and tone/gamma
           color *= brightness;
+          color = pow(color, vec3(1.0 / gamma));
 
           // Cyan tint
           color += vec3(0.0, cyanTint, cyanTint);
@@ -232,6 +251,15 @@ export default function ArcadeScene({ texture, enabled }) {
     mat.uniforms.gamma.value = crtTV.gamma
     mat.uniforms.enabled.value = crtTV.enabled ? 1.0 : 0.0
   }, [crtTV])
+
+  // Update bloom uniforms when Leva bloom controls change
+  useEffect(() => {
+    const mat = crtMatRef.current
+    if (!mat || !mat.uniforms) return
+    mat.uniforms.bloomIntensity.value = screenBloom.bloomIntensity
+    mat.uniforms.bloomThreshold.value = screenBloom.bloomThreshold
+    mat.uniforms.bloomRadius.value = screenBloom.bloomRadius
+  }, [screenBloom])
 
   useFrame(() => {})
 
@@ -280,8 +308,8 @@ export default function ArcadeScene({ texture, enabled }) {
           <directionalLight
             ref={redDirRef}
             color="#ff2222"
-            position={[1, 0, -8]}
-            intensity={90}
+            position={[1, 5, -8]}
+            intensity={10}
             castShadow
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
@@ -310,9 +338,6 @@ export default function ArcadeScene({ texture, enabled }) {
           <Center position={[0, 0.45, -9]} rotation={[0, Math.PI / 2, 0]}>
             <primitive ref={tvRef} object={gltf.scene} scale={[s, s, s]} />
           </Center>
-
-          {/* Global Bloom for Arcade scene */}
-          <ArcadeBloom enabled={bloomCtl.enabled} strength={bloomCtl.strength} radius={bloomCtl.radius} threshold={bloomCtl.threshold} />
         </>
       )}
     </group>
